@@ -2,22 +2,15 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
-const path = require('path'); // מודול חובה לניהול נתיבים בשרת
+const path = require('path'); // מודול חובה לניהול נתיבים
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// --- תיקון סופי לבעיית ה-ENOENT בשרת מרוחק (Render/Heroku) ---
-// אנו מניחים שהקבצים הסטטיים נמצאים בתיקיית הבסיס (Root) של הפרויקט 
-// ושרק השרת רץ מתוך תיקיית משנה (כמו 'src'). לכן, אנו עולים רמה אחת למעלה.
-const STATIC_FILES_DIR = path.resolve(__dirname, '..');
-// אם הפתרון הזה לא עובד, יש להחליף את '..' ב-'.'
-// const STATIC_FILES_DIR = path.resolve(__dirname, '.'); 
 
 // --- הגדרות וחיבור למסד הנתונים ---
 app.use(bodyParser.json());
 
-// **תיקון:** מגיש קבצים סטטיים מהנתיב המוחלט המתוקן
-app.use(express.static(STATIC_FILES_DIR));
+// **התיקון המרכזי:** מגיש קבצים סטטיים מהתיקייה שבה נמצא server.js (היא __dirname)
+app.use(express.static(path.join(__dirname)));
 
 const mongoURI = process.env.MONGO_URI; 
 if (!mongoURI) {
@@ -93,24 +86,25 @@ mongoose.connection.on('connected', initDB);
 
 // נתיב ראשי
 app.get('/', (req, res) => {
-    res.sendFile(path.join(STATIC_FILES_DIR, 'index.html'));
+    // path.join(__dirname, 'index.html') - יצירת נתיב אבסולוטי ואמין
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // נתיבים ספציפיים לקבצי HTML
 app.get('/admin.html', (req, res) => {
-    res.sendFile(path.join(STATIC_FILES_DIR, 'admin.html'));
+    res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
 app.get('/student.html', (req, res) => {
-    res.sendFile(path.join(STATIC_FILES_DIR, 'student.html'));
+    res.sendFile(path.join(__dirname, 'student.html'));
 });
 
 app.get('/shop-admin.html', (req, res) => {
-    res.sendFile(path.join(STATIC_FILES_DIR, 'shop-admin.html'));
+    res.sendFile(path.join(__dirname, 'shop-admin.html'));
 });
 
 app.get('/shop-student.html', (req, res) => {
-    res.sendFile(path.join(STATIC_FILES_DIR, 'shop-student.html'));
+    res.sendFile(path.join(__dirname, 'shop-student.html'));
 });
 
 // 1. התחברות
