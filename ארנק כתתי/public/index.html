@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>הארנק הכיתתי</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; background-color: #f0f2f5; padding: 20px; }
+        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+        input, button, select { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #0056b3; }
+        h1 { color: #333; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>הארנק הדיגיטלי 🎓</h1>
+        <p>ברוכים הבאים למערכת הפרסים</p>
+        
+        <select id="userType" onchange="togglePlaceholder()">
+            <option value="student">אני תלמיד</option>
+            <option value="admin">אני המורה</option>
+        </select>
+
+        <input type="password" id="code" placeholder="הכנס קוד תלמיד אישי">
+        <button onclick="login()">כניסה</button>
+        <p id="error" style="color:red;"></p>
+    </div>
+
+    <script>
+        function togglePlaceholder() {
+            const type = document.getElementById('userType').value;
+            document.getElementById('code').placeholder = type === 'student' ? "הכנס קוד תלמיד אישי" : "הכנס סיסמת מורה";
+        }
+
+        async function login() {
+            const code = document.getElementById('code').value;
+            const type = document.getElementById('userType').value;
+
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, type })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                if (data.role === 'admin') {
+                    localStorage.setItem('adminAuth', 'true'); 
+                    window.location.href = 'admin.html';
+                } else {
+                    localStorage.setItem('studentCode', code);
+                    localStorage.setItem('studentName', data.name);
+                    window.location.href = 'student.html';
+                }
+            } else {
+                document.getElementById('error').innerText = data.message;
+            }
+        }
+    </script>
+</body>
+</html>
