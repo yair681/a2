@@ -414,6 +414,68 @@ app.post('/api/purchases/:id/approve', async (req, res) => {
     }
 });
 
+// 14. מחיקת תלמיד
+app.delete('/api/students/:id', async (req, res) => {
+    try {
+        const studentId = req.params.id;
+        
+        // מחיקת התלמיד
+        const deletedStudent = await Student.findOneAndDelete({ id: studentId });
+        
+        if (!deletedStudent) {
+            return res.json({ success: false, message: "תלמיד לא נמצא" });
+        }
+        
+        // מחיקת כל הקניות של התלמיד
+        await Purchase.deleteMany({ studentId: studentId });
+        
+        res.json({ success: true, message: `התלמיד ${deletedStudent.name} נמחק בהצלחה` });
+    } catch (error) {
+        console.error("Delete student error:", error);
+        res.json({ success: false, message: "שגיאה במחיקת התלמיד" });
+    }
+});
+
+// 15. מחיקת כל ההיסטוריה
+app.delete('/api/purchases', async (req, res) => {
+    try {
+        const result = await Purchase.deleteMany({});
+        res.json({ 
+            success: true, 
+            message: `נמחקו ${result.deletedCount} רשומות קנייה בהצלחה` 
+        });
+    } catch (error) {
+        console.error("Delete all purchases error:", error);
+        res.json({ success: false, message: "שגיאה במחיקת ההיסטוריה" });
+    }
+});
+
+// 16. עדכון יתרה ידני (סכום מדויק)
+app.post('/api/set-balance', async (req, res) => {
+    try {
+        const { studentId, balance } = req.body;
+        
+        if (!studentId || balance === undefined) {
+            return res.json({ success: false, message: 'פרמטרים חסרים' });
+        }
+        
+        const updatedStudent = await Student.findOneAndUpdate(
+            { id: studentId },
+            { balance: parseInt(balance) },
+            { new: true }
+        );
+
+        if (updatedStudent) {
+            res.json({ success: true, newBalance: updatedStudent.balance });
+        } else {
+            res.json({ success: false, message: 'תלמיד לא נמצא' });
+        }
+    } catch (error) {
+        console.error("Set balance error:", error);
+        res.json({ success: false, message: 'שגיאה בעדכון היתרה' });
+    }
+});
+
 // טיפול בשגיאות כלליות
 app.use((err, req, res, next) => {
     console.error("Server error:", err);
