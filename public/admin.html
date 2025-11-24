@@ -115,6 +115,7 @@
         .actions {
             display: flex;
             gap: 5px;
+            flex-wrap: wrap;
         }
         .actions button { 
             padding: 7px 10px; 
@@ -234,15 +235,6 @@
             color: #666;
             font-family: monospace;
         }
-        .protected-badge {
-            background-color: #ffc107;
-            color: #333;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 0.85em;
-            font-weight: bold;
-            margin-right: 10px;
-        }
     </style>
 </head>
 <body>
@@ -352,7 +344,7 @@
             <div class="modal-header">שינוי סיסמת מורה</div>
             <div id="changePasswordTeacherName" style="margin-bottom: 15px; color: #666;"></div>
             <div style="margin-bottom: 10px;">סיסמה נוכחית: <strong id="currentTeacherPassword"></strong></div>
-            <input type="password" id="newTeacherPassword" placeholder="סיסמה חדשה">
+            <input type="text" id="newTeacherPassword" placeholder="סיסמה חדשה">
             <div class="modal-buttons">
                 <button class="btn-cancel" onclick="closeChangeTeacherPasswordModal()">ביטול</button>
                 <button class="btn-save" onclick="saveNewTeacherPassword()">שמור</button>
@@ -482,9 +474,9 @@
                     <div class="actions">
                         <button class="btn-plus" onclick="updateBalance('${s.id}', 10)">+10</button>
                         <button class="btn-minus" onclick="updateBalance('${s.id}', -10)">-10</button>
-                        <button class="btn-edit" onclick="openEditModal('${s.id}', '${s.name}', ${s.balance})">✏️ ערוך</button>
-                        <button class="btn-change-code" onclick="openChangeCodeModal('${s.id}', '${s.name}')">🔑 שנה קוד</button>
-                        <button class="btn-delete" onclick="deleteStudent('${s.id}', '${s.name}')">🗑️ מחק</button>
+                        <button class="btn-edit" onclick="openEditModal('${s.id}', '${s.name}', ${s.balance})">✏️</button>
+                        <button class="btn-change-code" onclick="openChangeCodeModal('${s.id}', '${s.name}')">🔑</button>
+                        <button class="btn-delete" onclick="deleteStudent('${s.id}', '${s.name}')">🗑️</button>
                     </div>
                 `;
                 list.appendChild(div);
@@ -509,16 +501,13 @@
                 div.className = 'teacher-row';
                 div.innerHTML = `
                     <div class="teacher-info">
-                        ${t.isProtected ? '<span class="protected-badge">🔒 מוגן</span>' : ''}
                         <div class="teacher-name">${t.name || 'מורה'}</div>
                         <div class="teacher-password">סיסמה: ${t.password}</div>
                         ${t.email ? `<div style="font-size: 0.9em; color: #666;">אימייל: ${t.email}</div>` : ''}
                     </div>
                     <div class="actions">
-                        ${!t.isProtected ? `
-                            <button class="btn-edit" onclick="openChangeTeacherPasswordModal('${t.password}', '${t.name || 'מורה'}')">🔑 שנה סיסמה</button>
-                            <button class="btn-delete" onclick="deleteTeacher('${t.password}', '${t.name || 'מורה'}')">🗑️ מחק</button>
-                        ` : '<span style="color: #999; font-size: 0.9em;">חשבון מוגן</span>'}
+                        <button class="btn-edit" onclick="openChangeTeacherPasswordModal('${t.password}', '${t.name || 'מורה'}')">🔑 שנה סיסמה</button>
+                        <button class="btn-delete" onclick="deleteTeacher('${t.password}', '${t.name || 'מורה'}')">🗑️ מחק</button>
                     </div>
                 `;
                 list.appendChild(div);
@@ -697,7 +686,7 @@
                 return;
             }
 
-            const res = await fetch(`/api/teachers/${password}`, {
+            const res = await fetch(`/api/teachers/${encodeURIComponent(password)}`, {
                 method: 'DELETE'
             });
             const data = await res.json();
