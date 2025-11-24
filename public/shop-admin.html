@@ -89,6 +89,13 @@
         .btn-danger:hover { 
             background-color: #c82333; 
         }
+        .btn-warning {
+            background-color: #ffc107;
+            color: #333;
+        }
+        .btn-warning:hover {
+            background-color: #e0a800;
+        }
         .btn-success { 
             background-color: #28a745; 
             color: white;
@@ -117,6 +124,19 @@
         .product-price, .purchase-price {
             color: #28a745;
             font-weight: bold;
+        }
+        .product-stock {
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .stock-ok {
+            color: #28a745;
+        }
+        .stock-low {
+            color: #ffc107;
+        }
+        .stock-out {
+            color: #dc3545;
         }
         .status-badge {
             padding: 5px 10px;
@@ -158,6 +178,57 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+        .stock-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .stock-input {
+            width: 80px;
+            padding: 5px;
+            margin: 0;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 400px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .modal-buttons button {
+            flex: 1;
+        }
+        .btn-cancel {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-save {
+            background-color: #28a745;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -183,6 +254,7 @@
             <h3>➕ הוספת מוצר חדש</h3>
             <input type="text" id="productName" placeholder="שם המוצר">
             <input type="number" id="productPrice" placeholder="מחיר בנקודות">
+            <input type="number" id="productStock" placeholder="כמות במלאי" min="0">
             <textarea id="productDescription" placeholder="תיאור המוצר (אופציונלי)"></textarea>
             <button class="btn btn-primary" onclick="addProduct()">הוסף מוצר</button>
             <div id="productMessage"></div>
@@ -210,10 +282,26 @@
         </div>
     </div>
 
+    <!-- מודל לעדכון מלאי -->
+    <div id="stockModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">עדכון מלאי</div>
+            <div id="stockProductName" style="margin-bottom: 15px; color: #666;"></div>
+            <div style="margin-bottom: 10px;">מלאי נוכחי: <strong id="currentStock">0</strong></div>
+            <input type="number" id="newStock" placeholder="מלאי חדש" min="0">
+            <div class="modal-buttons">
+                <button class="btn btn-cancel" onclick="closeStockModal()">ביטול</button>
+                <button class="btn btn-save" onclick="saveStock()">שמור</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         if (!localStorage.getItem('adminAuth')) {
             window.location.href = 'index.html';
         }
+
+        let currentEditProductId = null;
 
         function showTab(tabName) {
             // הסתרת כל הטאבים
@@ -246,17 +334,18 @@
         async function addProduct() {
             const name = document.getElementById('productName').value;
             const price = document.getElementById('productPrice').value;
+            const stock = document.getElementById('productStock').value;
             const description = document.getElementById('productDescription').value;
 
-            if (!name || !price) {
-                showMessage('productMessage', 'נא למלא שם ומחיר', false);
+            if (!name || !price || stock === '') {
+                showMessage('productMessage', 'נא למלא שם, מחיר ומלאי', false);
                 return;
             }
 
             const res = await fetch('/api/products', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, price, description })
+                body: JSON.stringify({ name, price, stock, description })
             });
             const data = await res.json();
 
@@ -264,6 +353,7 @@
                 showMessage('productMessage', data.message, true);
                 document.getElementById('productName').value = '';
                 document.getElementById('productPrice').value = '';
+                document.getElementById('productStock').value = '';
                 document.getElementById('productDescription').value = '';
                 loadProducts();
             } else {
@@ -285,16 +375,69 @@
             products.forEach(p => {
                 const div = document.createElement('div');
                 div.className = 'product-item';
+                
+                let stockClass = 'stock-ok';
+                let stockText = `${p.stock} יחידות במלאי`;
+                
+                if (p.stock === 0) {
+                    stockClass = 'stock-out';
+                    stockText = 'אזל מהמלאי ❌';
+                } else if (p.stock <= 5) {
+                    stockClass = 'stock-low';
+                    stockText = `${p.stock} יחידות - מלאי נמוך ⚠️`;
+                }
+                
                 div.innerHTML = `
                     <div class="product-info">
                         <div class="product-name">${p.name}</div>
                         <div>${p.description || ''}</div>
                         <div class="product-price">${p.price} נקודות</div>
+                        <div class="product-stock ${stockClass}">${stockText}</div>
                     </div>
-                    <button class="btn btn-danger" onclick="deleteProduct('${p._id}')">מחק</button>
+                    <div>
+                        <button class="btn btn-warning" onclick="openStockModal('${p._id}', '${p.name}', ${p.stock})">📦 עדכן מלאי</button>
+                        <button class="btn btn-danger" onclick="deleteProduct('${p._id}')">מחק</button>
+                    </div>
                 `;
                 list.appendChild(div);
             });
+        }
+
+        function openStockModal(id, name, stock) {
+            currentEditProductId = id;
+            document.getElementById('stockProductName').textContent = `מוצר: ${name}`;
+            document.getElementById('currentStock').textContent = stock;
+            document.getElementById('newStock').value = stock;
+            document.getElementById('stockModal').style.display = 'block';
+        }
+
+        function closeStockModal() {
+            document.getElementById('stockModal').style.display = 'none';
+            currentEditProductId = null;
+        }
+
+        async function saveStock() {
+            const newStock = document.getElementById('newStock').value;
+            
+            if (newStock === '' || newStock < 0) {
+                alert('נא להזין מלאי חוקי');
+                return;
+            }
+
+            const res = await fetch(`/api/products/${currentEditProductId}/stock`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stock: parseInt(newStock) })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                closeStockModal();
+                loadProducts();
+                alert(data.message);
+            } else {
+                alert('שגיאה: ' + data.message);
+            }
         }
 
         async function deleteProduct(id) {
@@ -366,6 +509,7 @@
             if (data.success) {
                 alert(data.message);
                 loadPendingPurchases();
+                loadProducts(); // רענון רשימת המוצרים לעדכון המלאי
             } else {
                 alert(data.message);
             }
