@@ -34,7 +34,6 @@
             padding: 25px; 
             border-radius: 12px; 
             box-shadow: 0 4px 10px rgba(0,0,0,0.08); 
-            margin-bottom: 20px;
         }
         
         /* עיצוב טופס */
@@ -75,21 +74,6 @@
         .btn-danger:hover {
             background-color: #c82333;
         }
-        .btn-warning {
-            background-color: #ffc107;
-            color: #333;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background-color 0.3s;
-            width: 100%;
-            margin-top: 10px;
-        }
-        .btn-warning:hover {
-            background-color: #e0a800;
-        }
 
         /* רשימת תלמידים */
         .student-row { 
@@ -115,7 +99,6 @@
         .actions {
             display: flex;
             gap: 5px;
-            flex-wrap: wrap;
         }
         .actions button { 
             padding: 7px 10px; 
@@ -129,9 +112,8 @@
         .btn-minus { background-color: #ffc107; color: #333; }
         .btn-edit { background-color: #17a2b8; }
         .btn-delete { background-color: #dc3545; }
-        .btn-change-code { background-color: #6f42c1; }
         
-        #message { 
+        #creationMessage { 
             margin-top: 15px; 
             padding: 10px; 
             border-radius: 6px; 
@@ -186,55 +168,6 @@
             background-color: #28a745;
             color: white;
         }
-
-        /* טאבים */
-        .tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .tab {
-            padding: 10px 20px;
-            background-color: #e9ecef;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s;
-        }
-        .tab.active {
-            background-color: #007bff;
-            color: white;
-        }
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-
-        /* רשימת מורים */
-        .teacher-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #eee;
-            padding: 15px 0;
-        }
-        .teacher-row:last-child {
-            border-bottom: none;
-        }
-        .teacher-info {
-            flex: 1;
-        }
-        .teacher-name {
-            font-weight: bold;
-            font-size: 1.1em;
-        }
-        .teacher-password {
-            color: #666;
-            font-family: monospace;
-        }
     </style>
 </head>
 <body>
@@ -246,68 +179,39 @@
         </div>
     </div>
 
-    <div class="tabs">
-        <button class="tab active" onclick="showTab('students')">👨‍🎓 ניהול תלמידים</button>
-        <button class="tab" onclick="showTab('teachers')">👨‍🏫 ניהול מורים</button>
-        <button class="tab" onclick="showTab('settings')">⚙️ הגדרות</button>
-    </div>
-
-    <!-- טאב תלמידים -->
-    <div id="studentsTab" class="tab-content active">
-        <div class="content-grid">
-            <div class="card">
-                <h3>⚡ יצירת תלמיד חדש</h3>
+    <div class="content-grid">
+        <div class="card">
+            <h3>⚡ יצירת משתמש חדש</h3>
+            <label>
+                <input type="radio" name="userType" value="student" checked onchange="toggleUserType()"> תלמיד
+                <input type="radio" name="userType" value="teacher" onchange="toggleUserType()" style="margin-right: 15px;"> מורה
+            </label>
+            <div id="studentForm">
+                <h4 style="margin-top: 15px;">יצירת תלמיד חדש</h4>
                 <input type="number" id="newId" placeholder="קוד תלמיד (למשל 104)" required>
                 <input type="text" id="newName" placeholder="שם מלא של התלמיד" required>
                 <input type="number" id="initialBalance" placeholder="יתרה התחלתית (ברירת מחדל: 0)" value="0">
                 <button class="btn-primary" onclick="createNewStudent()">צור תלמיד</button>
-                <div id="creationMessage"></div>
             </div>
-
-            <div class="card">
-                <h3>רשימת תלמידים ויתרה</h3>
-                <div id="studentsList"></div>
-                <div id="loading" style="text-align: center;">טוען נתונים...</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- טאב מורים -->
-    <div id="teachersTab" class="tab-content">
-        <div class="content-grid">
-            <div class="card">
-                <h3>⚡ יצירת מורה חדש</h3>
+            <div id="teacherForm" style="display: none;">
+                <h4 style="margin-top: 15px;">יצירת מורה חדש</h4>
                 <input type="text" id="teacherPassword" placeholder="סיסמת המורה החדש" required>
-                <input type="text" id="teacherName" placeholder="שם המורה">
-                <input type="email" id="teacherEmail" placeholder="אימייל (אופציונלי)">
+                <input type="text" id="teacherName" placeholder="שם המורה (אופציונלי)">
                 <button class="btn-primary" onclick="createNewTeacher()">צור מורה</button>
-                <div id="teacherCreationMessage"></div>
             </div>
-
-            <div class="card">
-                <h3>רשימת מורים במערכת</h3>
-                <div id="teachersList"></div>
-                <div id="teachersLoading" style="text-align: center;">טוען נתונים...</div>
-            </div>
+            <div id="creationMessage"></div>
+            
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+            
+            <h3>🗑️ מחיקת נתונים</h3>
+            <button class="btn-danger" onclick="deleteAllHistory()">מחק את כל ההיסטוריה</button>
+            <p style="font-size: 0.85em; color: #666; margin-top: 10px;">פעולה זו תמחק את כל רשומות הקניות מהמערכת</p>
         </div>
-    </div>
 
-    <!-- טאב הגדרות -->
-    <div id="settingsTab" class="tab-content">
-        <div class="content-grid">
-            <div class="card">
-                <h3>🔑 שינוי סיסמה שלי</h3>
-                <input type="password" id="myOldPassword" placeholder="סיסמה נוכחית">
-                <input type="password" id="myNewPassword" placeholder="סיסמה חדשה">
-                <button class="btn-warning" onclick="changeMyPassword()">שנה סיסמה</button>
-                <div id="passwordChangeMessage"></div>
-            </div>
-
-            <div class="card">
-                <h3>🗑️ מחיקת נתונים</h3>
-                <button class="btn-danger" onclick="deleteAllHistory()">מחק את כל ההיסטוריה</button>
-                <p style="font-size: 0.85em; color: #666; margin-top: 10px;">פעולה זו תמחק את כל רשומות הקניות מהמערכת</p>
-            </div>
+        <div class="card">
+            <h3>רשימת תלמידים ויתרה</h3>
+            <div id="studentsList"></div>
+            <div id="loading" style="text-align: center;">טוען נתונים...</div>
         </div>
     </div>
 
@@ -324,34 +228,6 @@
         </div>
     </div>
 
-    <!-- מודל לשינוי קוד תלמיד -->
-    <div id="changeCodeModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">שינוי קוד תלמיד</div>
-            <div id="changeCodeStudentName" style="margin-bottom: 15px; color: #666;"></div>
-            <div style="margin-bottom: 10px;">קוד נוכחי: <strong id="currentCode"></strong></div>
-            <input type="number" id="newCode" placeholder="קוד חדש">
-            <div class="modal-buttons">
-                <button class="btn-cancel" onclick="closeChangeCodeModal()">ביטול</button>
-                <button class="btn-save" onclick="saveNewCode()">שמור</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- מודל לשינוי סיסמת מורה -->
-    <div id="changeTeacherPasswordModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">שינוי סיסמת מורה</div>
-            <div id="changePasswordTeacherName" style="margin-bottom: 15px; color: #666;"></div>
-            <div style="margin-bottom: 10px;">סיסמה נוכחית: <strong id="currentTeacherPassword"></strong></div>
-            <input type="text" id="newTeacherPassword" placeholder="סיסמה חדשה">
-            <div class="modal-buttons">
-                <button class="btn-cancel" onclick="closeChangeTeacherPasswordModal()">ביטול</button>
-                <button class="btn-save" onclick="saveNewTeacherPassword()">שמור</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         // בקרת גישה פשוטה למורה
         if (!localStorage.getItem('adminAuth')) {
@@ -359,8 +235,6 @@
         }
 
         let currentEditStudentId = null;
-        let currentChangeCodeStudentId = null;
-        let currentChangePasswordTeacherPassword = null;
 
         function logout() {
             localStorage.removeItem('adminAuth');
@@ -374,49 +248,42 @@
             setTimeout(() => { el.innerHTML = ''; el.className = ''; }, 3000);
         }
 
-        function showTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        function toggleUserType() {
+            const userType = document.querySelector('input[name="userType"]:checked').value;
+            const studentForm = document.getElementById('studentForm');
+            const teacherForm = document.getElementById('teacherForm');
             
-            if (tabName === 'students') {
-                document.getElementById('studentsTab').classList.add('active');
-                document.querySelectorAll('.tab')[0].classList.add('active');
-                loadStudents();
-            } else if (tabName === 'teachers') {
-                document.getElementById('teachersTab').classList.add('active');
-                document.querySelectorAll('.tab')[1].classList.add('active');
-                loadTeachers();
-            } else if (tabName === 'settings') {
-                document.getElementById('settingsTab').classList.add('active');
-                document.querySelectorAll('.tab')[2].classList.add('active');
+            if (userType === 'student') {
+                studentForm.style.display = 'block';
+                teacherForm.style.display = 'none';
+            } else {
+                studentForm.style.display = 'none';
+                teacherForm.style.display = 'block';
             }
         }
 
         async function createNewTeacher() {
             const password = document.getElementById('teacherPassword').value;
             const name = document.getElementById('teacherName').value;
-            const email = document.getElementById('teacherEmail').value;
             
             if (!password) {
-                showMessage('teacherCreationMessage', 'נא למלא סיסמה למורה.', false);
+                showMessage('creationMessage', 'נא למלא סיסמה למורה.', false);
                 return;
             }
 
             const res = await fetch('/api/create-teacher', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password, name, email })
+                body: JSON.stringify({ password, name })
             });
             const data = await res.json();
             
             if (data.success) {
-                showMessage('teacherCreationMessage', data.message, true);
+                showMessage('creationMessage', data.message, true);
                 document.getElementById('teacherPassword').value = '';
                 document.getElementById('teacherName').value = '';
-                document.getElementById('teacherEmail').value = '';
-                loadTeachers();
             } else {
-                showMessage('teacherCreationMessage', data.message, false);
+                showMessage('creationMessage', data.message, false);
             }
         }
 
@@ -474,40 +341,8 @@
                     <div class="actions">
                         <button class="btn-plus" onclick="updateBalance('${s.id}', 10)">+10</button>
                         <button class="btn-minus" onclick="updateBalance('${s.id}', -10)">-10</button>
-                        <button class="btn-edit" onclick="openEditModal('${s.id}', '${s.name}', ${s.balance})">✏️</button>
-                        <button class="btn-change-code" onclick="openChangeCodeModal('${s.id}', '${s.name}')">🔑</button>
-                        <button class="btn-delete" onclick="deleteStudent('${s.id}', '${s.name}')">🗑️</button>
-                    </div>
-                `;
-                list.appendChild(div);
-            });
-        }
-
-        async function loadTeachers() {
-            document.getElementById('teachersLoading').style.display = 'block';
-            const res = await fetch('/api/teachers');
-            const teachers = await res.json();
-            const list = document.getElementById('teachersList');
-            list.innerHTML = '';
-            document.getElementById('teachersLoading').style.display = 'none';
-
-            if (teachers.length === 0) {
-                list.innerHTML = '<p style="text-align: center; color: #6c757d;">עדיין אין מורים במערכת.</p>';
-                return;
-            }
-
-            teachers.forEach(t => {
-                const div = document.createElement('div');
-                div.className = 'teacher-row';
-                div.innerHTML = `
-                    <div class="teacher-info">
-                        <div class="teacher-name">${t.name || 'מורה'}</div>
-                        <div class="teacher-password">סיסמה: ${t.password}</div>
-                        ${t.email ? `<div style="font-size: 0.9em; color: #666;">אימייל: ${t.email}</div>` : ''}
-                    </div>
-                    <div class="actions">
-                        <button class="btn-edit" onclick="openChangeTeacherPasswordModal('${t.password}', '${t.name || 'מורה'}')">🔑 שנה סיסמה</button>
-                        <button class="btn-delete" onclick="deleteTeacher('${t.password}', '${t.name || 'מורה'}')">🗑️ מחק</button>
+                        <button class="btn-edit" onclick="openEditModal('${s.id}', '${s.name}', ${s.balance})">✏️ ערוך</button>
+                        <button class="btn-delete" onclick="deleteStudent('${s.id}', '${s.name}')">🗑️ מחק</button>
                     </div>
                 `;
                 list.appendChild(div);
@@ -564,105 +399,6 @@
             }
         }
 
-        function openChangeCodeModal(id, name) {
-            currentChangeCodeStudentId = id;
-            document.getElementById('changeCodeStudentName').textContent = `תלמיד: ${name}`;
-            document.getElementById('currentCode').textContent = id;
-            document.getElementById('newCode').value = '';
-            document.getElementById('changeCodeModal').style.display = 'block';
-        }
-
-        function closeChangeCodeModal() {
-            document.getElementById('changeCodeModal').style.display = 'none';
-            currentChangeCodeStudentId = null;
-        }
-
-        async function saveNewCode() {
-            const newCode = document.getElementById('newCode').value;
-            
-            if (!newCode) {
-                alert('נא להזין קוד חדש');
-                return;
-            }
-
-            const res = await fetch('/api/change-student-code', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ oldCode: currentChangeCodeStudentId, newCode: newCode })
-            });
-            const data = await res.json();
-            
-            if (data.success) {
-                alert(data.message);
-                closeChangeCodeModal();
-                loadStudents();
-            } else {
-                alert('שגיאה: ' + data.message);
-            }
-        }
-
-        function openChangeTeacherPasswordModal(password, name) {
-            currentChangePasswordTeacherPassword = password;
-            document.getElementById('changePasswordTeacherName').textContent = `מורה: ${name}`;
-            document.getElementById('currentTeacherPassword').textContent = password;
-            document.getElementById('newTeacherPassword').value = '';
-            document.getElementById('changeTeacherPasswordModal').style.display = 'block';
-        }
-
-        function closeChangeTeacherPasswordModal() {
-            document.getElementById('changeTeacherPasswordModal').style.display = 'none';
-            currentChangePasswordTeacherPassword = null;
-        }
-
-        async function saveNewTeacherPassword() {
-            const newPassword = document.getElementById('newTeacherPassword').value;
-            
-            if (!newPassword) {
-                alert('נא להזין סיסמה חדשה');
-                return;
-            }
-
-            const res = await fetch('/api/change-teacher-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ oldPassword: currentChangePasswordTeacherPassword, newPassword: newPassword })
-            });
-            const data = await res.json();
-            
-            if (data.success) {
-                alert(data.message);
-                closeChangeTeacherPasswordModal();
-                loadTeachers();
-            } else {
-                alert('שגיאה: ' + data.message);
-            }
-        }
-
-        async function changeMyPassword() {
-            const oldPassword = document.getElementById('myOldPassword').value;
-            const newPassword = document.getElementById('myNewPassword').value;
-
-            if (!oldPassword || !newPassword) {
-                showMessage('passwordChangeMessage', 'נא למלא את שני השדות', false);
-                return;
-            }
-
-            const res = await fetch('/api/change-teacher-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ oldPassword, newPassword })
-            });
-            const data = await res.json();
-
-            if (data.success) {
-                showMessage('passwordChangeMessage', data.message + ' - הסיסמה החדשה שלך: ' + newPassword, true);
-                document.getElementById('myOldPassword').value = '';
-                document.getElementById('myNewPassword').value = '';
-            } else {
-                showMessage('passwordChangeMessage', data.message, false);
-            }
-        }
-
         async function deleteStudent(id, name) {
             if (!confirm(`האם אתה בטוח שברצונך למחוק את התלמיד "${name}"?\n\nפעולה זו תמחק גם את כל הקניות של התלמיד ולא ניתן לבטל אותה!`)) {
                 return;
@@ -676,24 +412,6 @@
             if (data.success) {
                 alert(data.message);
                 loadStudents();
-            } else {
-                alert('שגיאה: ' + data.message);
-            }
-        }
-
-        async function deleteTeacher(password, name) {
-            if (!confirm(`האם אתה בטוח שברצונך למחוק את המורה "${name}"?\n\nפעולה זו לא ניתנת לביטול!`)) {
-                return;
-            }
-
-            const res = await fetch(`/api/teachers/${encodeURIComponent(password)}`, {
-                method: 'DELETE'
-            });
-            const data = await res.json();
-
-            if (data.success) {
-                alert(data.message);
-                loadTeachers();
             } else {
                 alert('שגיאה: ' + data.message);
             }
@@ -716,7 +434,11 @@
             }
         }
 
+        // טעינה ראשונית
         loadStudents();
+        
+        // רענון אוטומטי כל דקה
+        setInterval(loadStudents, 60000);
     </script>
 </body>
 </html>
