@@ -6,11 +6,18 @@ const path = require('path'); // מודול חובה לניהול נתיבים �
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// --- תיקון סופי לבעיית ה-ENOENT בשרת מרוחק (Render/Heroku) ---
+// אנו מניחים שהקבצים הסטטיים נמצאים בתיקיית הבסיס (Root) של הפרויקט 
+// ושרק השרת רץ מתוך תיקיית משנה (כמו 'src'). לכן, אנו עולים רמה אחת למעלה.
+const STATIC_FILES_DIR = path.resolve(__dirname, '..');
+// אם הפתרון הזה לא עובד, יש להחליף את '..' ב-'.'
+// const STATIC_FILES_DIR = path.resolve(__dirname, '.'); 
+
 // --- הגדרות וחיבור למסד הנתונים ---
 app.use(bodyParser.json());
 
-// **תיקון סופי:** מגיש קבצים סטטיים מהתיקייה הנוכחית באמצעות path.resolve
-app.use(express.static(path.resolve(__dirname)));
+// **תיקון:** מגיש קבצים סטטיים מהנתיב המוחלט המתוקן
+app.use(express.static(STATIC_FILES_DIR));
 
 const mongoURI = process.env.MONGO_URI; 
 if (!mongoURI) {
@@ -86,24 +93,24 @@ mongoose.connection.on('connected', initDB);
 
 // נתיב ראשי
 app.get('/', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'index.html')); // path.resolve
+    res.sendFile(path.join(STATIC_FILES_DIR, 'index.html'));
 });
 
 // נתיבים ספציפיים לקבצי HTML
 app.get('/admin.html', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'admin.html')); // path.resolve
+    res.sendFile(path.join(STATIC_FILES_DIR, 'admin.html'));
 });
 
 app.get('/student.html', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'student.html')); // path.resolve
+    res.sendFile(path.join(STATIC_FILES_DIR, 'student.html'));
 });
 
 app.get('/shop-admin.html', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'shop-admin.html')); // path.resolve
+    res.sendFile(path.join(STATIC_FILES_DIR, 'shop-admin.html'));
 });
 
 app.get('/shop-student.html', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'shop-student.html')); // path.resolve
+    res.sendFile(path.join(STATIC_FILES_DIR, 'shop-student.html'));
 });
 
 // 1. התחברות
