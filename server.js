@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 
 // --- הגדרות וחיבור למסד הנתונים ---
 app.use(bodyParser.json());
-app.use(express.static('public'));
+app.use(express.static(__dirname)); // FIX: Serving static files from the current directory
 
 const mongoURI = process.env.MONGO_URI; 
 if (!mongoURI) {
