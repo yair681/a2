@@ -2,14 +2,14 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
-const path = require('path'); // הוספת מודול path
+const path = require('path'); 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- הגדרות וחיבור למסד הנתונים ---
 app.use(bodyParser.json());
-// תיקון: מגיש קבצים סטטיים מהתיקייה הנוכחית
-app.use(express.static(__dirname));
+// ממשיכים לשרת קבצים סטטיים מהתיקייה הנוכחית
+app.use(express.static(path.join(process.cwd())));
 
 const mongoURI = process.env.MONGO_URI; 
 if (!mongoURI) {
@@ -85,24 +85,24 @@ mongoose.connection.on('connected', initDB);
 
 // נתיב ראשי
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(process.cwd(), 'index.html')); // שימוש ב-process.cwd()
 });
 
 // נתיבים ספציפיים לקבצי HTML
 app.get('/admin.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'admin.html'));
+    res.sendFile(path.join(process.cwd(), 'admin.html')); // שימוש ב-process.cwd()
 });
 
 app.get('/student.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'student.html'));
+    res.sendFile(path.join(process.cwd(), 'student.html')); // שימוש ב-process.cwd()
 });
 
 app.get('/shop-admin.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'shop-admin.html'));
+    res.sendFile(path.join(process.cwd(), 'shop-admin.html')); // שימוש ב-process.cwd()
 });
 
 app.get('/shop-student.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'shop-student.html'));
+    res.sendFile(path.join(process.cwd(), 'shop-student.html')); // שימוש ב-process.cwd()
 });
 
 // 1. התחברות
