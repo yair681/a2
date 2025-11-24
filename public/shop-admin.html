@@ -557,7 +557,13 @@
         // טעינה ראשונית + רענון תקופתי של התראות
         loadProducts();
         loadPendingPurchases();
-        setInterval(loadPendingPurchases, 30000); // רענון כל 30 שניות
+        setInterval(() => {
+            loadPendingPurchases();
+            // רענון המוצרים אם אנחנו בטאב מוצרים
+            if (document.getElementById('productsTab').classList.contains('active')) {
+                loadProducts();
+            }
+        }, 30000); // רענון כל 30 שניות
     </script>
 </body>
 </html>
