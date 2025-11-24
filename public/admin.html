@@ -26,7 +26,7 @@
         }
         .content-grid {
             display: grid;
-            grid-template-columns: 1fr 2fr; /* טופס משמאל, רשימה מימין */
+            grid-template-columns: 1fr 2fr;
             gap: 30px;
         }
         .card { 
@@ -59,6 +59,21 @@
         .btn-primary:hover { 
             background-color: #218838; 
         }
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+            width: 100%;
+            margin-top: 10px;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
 
         /* רשימת תלמידים */
         .student-row { 
@@ -74,14 +89,19 @@
         }
         .student-info { 
             font-weight: 500;
+            flex: 1;
         }
         .balance-display { 
             font-weight: bold; 
             color: #007bff;
+            margin: 0 15px;
+        }
+        .actions {
+            display: flex;
+            gap: 5px;
         }
         .actions button { 
             padding: 7px 10px; 
-            margin: 0 2px; 
             border-radius: 5px; 
             border: none; 
             cursor: pointer; 
@@ -89,7 +109,10 @@
             font-size: 0.9em;
         }
         .btn-plus { background-color: #28a745; }
-        .btn-minus { background-color: #dc3545; }
+        .btn-minus { background-color: #ffc107; color: #333; }
+        .btn-edit { background-color: #17a2b8; }
+        .btn-delete { background-color: #dc3545; }
+        
         #message { 
             margin-top: 15px; 
             padding: 10px; 
@@ -98,6 +121,53 @@
         }
         .msg-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .msg-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+        /* מודל לעריכת יתרה */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 400px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .modal-buttons button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-cancel {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-save {
+            background-color: #28a745;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -118,9 +188,9 @@
             </label>
             <div id="studentForm">
                 <h4 style="margin-top: 15px;">יצירת תלמיד חדש</h4>
-            <input type="number" id="newId" placeholder="קוד תלמיד (למשל 104)" required>
-            <input type="text" id="newName" placeholder="שם מלא של התלמיד" required>
-            <input type="number" id="initialBalance" placeholder="יתרה התחלתית (ברירת מחדל: 0)" value="0">
+                <input type="number" id="newId" placeholder="קוד תלמיד (למשל 104)" required>
+                <input type="text" id="newName" placeholder="שם מלא של התלמיד" required>
+                <input type="number" id="initialBalance" placeholder="יתרה התחלתית (ברירת מחדל: 0)" value="0">
                 <button class="btn-primary" onclick="createNewStudent()">צור תלמיד</button>
             </div>
             <div id="teacherForm" style="display: none;">
@@ -130,6 +200,12 @@
                 <button class="btn-primary" onclick="createNewTeacher()">צור מורה</button>
             </div>
             <div id="creationMessage"></div>
+            
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+            
+            <h3>🗑️ מחיקת נתונים</h3>
+            <button class="btn-danger" onclick="deleteAllHistory()">מחק את כל ההיסטוריה</button>
+            <p style="font-size: 0.85em; color: #666; margin-top: 10px;">פעולה זו תמחק את כל רשומות הקניות מהמערכת</p>
         </div>
 
         <div class="card">
@@ -139,11 +215,26 @@
         </div>
     </div>
 
+    <!-- מודל לעריכת יתרה -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">עריכת יתרה</div>
+            <div id="editStudentName" style="margin-bottom: 15px; color: #666;"></div>
+            <input type="number" id="editBalance" placeholder="יתרה חדשה">
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeEditModal()">ביטול</button>
+                <button class="btn-save" onclick="saveBalance()">שמור</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // בקרת גישה פשוטה למורה
         if (!localStorage.getItem('adminAuth')) {
             window.location.href = 'index.html';
         }
+
+        let currentEditStudentId = null;
 
         function logout() {
             localStorage.removeItem('adminAuth');
@@ -218,7 +309,7 @@
                 document.getElementById('newId').value = '';
                 document.getElementById('newName').value = '';
                 document.getElementById('initialBalance').value = '0';
-                loadStudents(); // רענון הרשימה
+                loadStudents();
             } else {
                 showMessage('creationMessage', data.message, false);
             }
@@ -244,12 +335,14 @@
                     <div class="student-info">
                         ${s.name} (קוד: ${s.id})
                     </div>
-                    <div>
-                        יתרה: <span id="bal-${s.id}" class="balance-display">${s.balance}</span>
+                    <div class="balance-display">
+                        יתרה: <span id="bal-${s.id}">${s.balance}</span>
                     </div>
                     <div class="actions">
                         <button class="btn-plus" onclick="updateBalance('${s.id}', 10)">+10</button>
                         <button class="btn-minus" onclick="updateBalance('${s.id}', -10)">-10</button>
+                        <button class="btn-edit" onclick="openEditModal('${s.id}', '${s.name}', ${s.balance})">✏️ ערוך</button>
+                        <button class="btn-delete" onclick="deleteStudent('${s.id}', '${s.name}')">🗑️ מחק</button>
                     </div>
                 `;
                 list.appendChild(div);
@@ -268,6 +361,76 @@
                 document.getElementById(`bal-${id}`).innerText = data.newBalance;
             } else {
                 alert('שגיאה בעדכון היתרה: ' + data.message);
+            }
+        }
+
+        function openEditModal(id, name, balance) {
+            currentEditStudentId = id;
+            document.getElementById('editStudentName').textContent = `תלמיד: ${name}`;
+            document.getElementById('editBalance').value = balance;
+            document.getElementById('editModal').style.display = 'block';
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            currentEditStudentId = null;
+        }
+
+        async function saveBalance() {
+            const newBalance = document.getElementById('editBalance').value;
+            
+            if (!newBalance || newBalance < 0) {
+                alert('נא להזין יתרה חוקית');
+                return;
+            }
+
+            const res = await fetch('/api/set-balance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ studentId: currentEditStudentId, balance: parseInt(newBalance) })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                document.getElementById(`bal-${currentEditStudentId}`).innerText = data.newBalance;
+                closeEditModal();
+            } else {
+                alert('שגיאה בעדכון היתרה: ' + data.message);
+            }
+        }
+
+        async function deleteStudent(id, name) {
+            if (!confirm(`האם אתה בטוח שברצונך למחוק את התלמיד "${name}"?\n\nפעולה זו תמחק גם את כל הקניות של התלמיד ולא ניתן לבטל אותה!`)) {
+                return;
+            }
+
+            const res = await fetch(`/api/students/${id}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                alert(data.message);
+                loadStudents();
+            } else {
+                alert('שגיאה: ' + data.message);
+            }
+        }
+
+        async function deleteAllHistory() {
+            if (!confirm('האם אתה בטוח שברצונך למחוק את כל היסטוריית הקניות?\n\nפעולה זו לא ניתנת לביטול!')) {
+                return;
+            }
+
+            const res = await fetch('/api/purchases', {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                alert(data.message);
+            } else {
+                alert('שגיאה: ' + data.message);
             }
         }
 
