@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- הגדרות וחיבור למסד הנתונים ---
+// --- הגדרות וחיבור למסד נתונים ---
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
@@ -56,11 +56,15 @@ const purchaseSchema = new mongoose.Schema({
 const Purchase = mongoose.model('Purchase', purchaseSchema);
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "1234";
+const PROTECTED_EMAIL = "yairfrish2@gmail.com";
+const PROTECTED_PASSWORD = "yair12345";
 
 // --- הגדרת המבנה של מורה ---
 const teacherSchema = new mongoose.Schema({
     password: { type: String, required: true, unique: true },
     name: String,
+    email: String,
+    isProtected: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -79,6 +83,19 @@ async function initDB() {
             ];
             await Student.insertMany(initialStudents);
             console.log("Database initialization complete.");
+        }
+        
+        // אתחול מורה מוגן
+        const protectedTeacher = await Teacher.findOne({ email: PROTECTED_EMAIL });
+        if (!protectedTeacher) {
+            const newProtectedTeacher = new Teacher({
+                password: PROTECTED_PASSWORD,
+                name: "מורה ראשי",
+                email: PROTECTED_EMAIL,
+                isProtected: true
+            });
+            await newProtectedTeacher.save();
+            console.log("Protected teacher account created.");
         }
     } catch (error) {
         console.error("Error initializing database:", error);
@@ -113,7 +130,13 @@ app.post('/api/login', async (req, res) => {
                 // בדיקה שנייה - מורים נוספים
                 const teacher = await Teacher.findOne({ password: code });
                 if (teacher) {
-                    return res.json({ success: true, role: 'admin', teacherName: teacher.name });
+                    return res.json({ 
+                        success: true, 
+                        role: 'admin', 
+                        teacherName: teacher.name,
+                        teacherEmail: teacher.email,
+                        isProtected: teacher.isProtected 
+                    });
                 } else {
                     return res.json({ success: false, message: 'סיסמה שגויה' });
                 }
@@ -180,7 +203,7 @@ app.post('/api/create-student', async (req, res) => {
         const { id, name, balance } = req.body;
         
         if (!id || !name) {
-            return res.json({ success: false, message: "קוד ושם תלמיד הם שדות חובה" });
+            return res.json({ success: false, message: "קוד ושם תלמיד הן שדות חובה" });
         }
         
         const existingStudent = await Student.findOne({ id: id });
@@ -205,10 +228,10 @@ app.post('/api/create-student', async (req, res) => {
 // 5. יצירת מורה
 app.post('/api/create-teacher', async (req, res) => {
     try {
-        const { password, name } = req.body;
+        const { password, name, email } = req.body;
         
         if (!password) {
-            return res.json({ success: false, message: "סיסמה היא שדה חובה" });
+            return res.json({ success: false, message: "סיסמה הינה שדה חובה" });
         }
 
         // בדיקה שהסיסמה לא קיימת
@@ -218,13 +241,15 @@ app.post('/api/create-teacher', async (req, res) => {
         }
         
         // בדיקה שהסיסמה לא זהה לסיסמת המורה הראשי
-        if (password === ADMIN_PASSWORD) {
+        if (password === ADMIN_PASSWORD || password === PROTECTED_PASSWORD) {
             return res.json({ success: false, message: "לא ניתן להשתמש בסיסמת המורה הראשי" });
         }
 
         const newTeacher = new Teacher({
             password: password,
-            name: name || ''
+            name: name || '',
+            email: email || '',
+            isProtected: false
         });
 
         await newTeacher.save();
@@ -267,7 +292,7 @@ app.post('/api/products', async (req, res) => {
         const { name, price, description } = req.body;
         
         if (!name || !price) {
-            return res.json({ success: false, message: "שם ומחיר הם שדות חובה" });
+            return res.json({ success: false, message: "שם ומחיר הן שדות חובה" });
         }
 
         const newProduct = new Product({
@@ -476,6 +501,126 @@ app.post('/api/set-balance', async (req, res) => {
     }
 });
 
+// 17. שינוי קוד תלמיד
+app.post('/api/change-student-code', async (req, res) => {
+    try {
+        const { oldCode, newCode } = req.body;
+        
+        if (!oldCode || !newCode) {
+            return res.json({ success: false, message: 'נא למלא את שני השדות' });
+        }
+        
+        // בדיקה שהקוד החדש לא תפוס
+        const existingStudent = await Student.findOne({ id: newCode });
+        if (existingStudent) {
+            return res.json({ success: false, message: 'הקוד החדש כבר תפוס במערכת' });
+        }
+        
+        // עדכון הקוד
+        const student = await Student.findOne({ id: oldCode });
+        if (!student) {
+            return res.json({ success: false, message: 'תלמיד לא נמצא' });
+        }
+        
+        student.id = newCode;
+        await student.save();
+        
+        // עדכון גם בכל הקניות
+        await Purchase.updateMany(
+            { studentId: oldCode },
+            { studentId: newCode }
+        );
+        
+        res.json({ 
+            success: true, 
+            message: `הקוד של ${student.name} שונה בהצלחה מ-${oldCode} ל-${newCode}`,
+            newCode: newCode
+        });
+    } catch (error) {
+        console.error("Change student code error:", error);
+        res.json({ success: false, message: 'שגיאה בשינוי הקוד' });
+    }
+});
+
+// 18. קבלת רשימת מורים
+app.get('/api/teachers', async (req, res) => {
+    try {
+        const teachers = await Teacher.find({}).select('password name email isProtected createdAt').sort({ createdAt: -1 });
+        res.json(teachers);
+    } catch (error) {
+        console.error("Get teachers error:", error);
+        res.json([]);
+    }
+});
+
+// 19. שינוי סיסמת מורה
+app.post('/api/change-teacher-password', async (req, res) => {
+    try {
+        const { oldPassword, newPassword } = req.body;
+        
+        if (!oldPassword || !newPassword) {
+            return res.json({ success: false, message: 'נא למלא את שני השדות' });
+        }
+        
+        // בדיקה שהסיסמה החדשה לא תפוסה
+        const existingTeacher = await Teacher.findOne({ password: newPassword });
+        if (existingTeacher) {
+            return res.json({ success: false, message: 'הסיסמה החדשה כבר תפוסה במערכת' });
+        }
+        
+        // חיפוש המורה
+        const teacher = await Teacher.findOne({ password: oldPassword });
+        if (!teacher) {
+            return res.json({ success: false, message: 'סיסמה ישנה שגויה' });
+        }
+        
+        // בדיקה אם זה חשבון מוגן
+        if (teacher.isProtected) {
+            return res.json({ success: false, message: 'לא ניתן לשנות סיסמה לחשבון מוגן זה' });
+        }
+        
+        // עדכון הסיסמה
+        teacher.password = newPassword;
+        await teacher.save();
+        
+        res.json({ 
+            success: true, 
+            message: `הסיסמה של ${teacher.name || 'המורה'} שונתה בהצלחה`,
+            newPassword: newPassword
+        });
+    } catch (error) {
+        console.error("Change teacher password error:", error);
+        res.json({ success: false, message: 'שגיאה בשינוי הסיסמה' });
+    }
+});
+
+// 20. מחיקת מורה
+app.delete('/api/teachers/:password', async (req, res) => {
+    try {
+        const password = req.params.password;
+        
+        // חיפוש המורה
+        const teacher = await Teacher.findOne({ password: password });
+        
+        if (!teacher) {
+            return res.json({ success: false, message: "מורה לא נמצא" });
+        }
+        
+        // בדיקה אם זה חשבון מוגן
+        if (teacher.isProtected) {
+            return res.json({ success: false, message: "לא ניתן למחוק את החשבון המוגן הזה" });
+        }
+        
+        // מחיקת המורה
+        await Teacher.findOneAndDelete({ password: password });
+        
+        res.json({ success: true, message: `המורה ${teacher.name || ''} נמחק בהצלחה` });
+    } catch (error) {
+        console.error("Delete teacher error:", error);
+        res.json({ success: false, message: "שגיאה במחיקת המורה" });
+    }
+});
+
 // טיפול בשגיאות כלליות
 app.use((err, req, res, next) => {
     console.error("Server error:", err);
@@ -485,4 +630,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Admin password: ${ADMIN_PASSWORD}`);
+    console.log(`Protected account: ${PROTECTED_EMAIL}`);
 });
