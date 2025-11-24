@@ -73,29 +73,30 @@ const Teacher = mongoose.model('Teacher', teacherSchema);
 // --- פונקציה לאתחול ראשוני של הכיתה ---
 async function initDB() {
     try {
-        const count = await Student.countDocuments();
-        if (count === 0) {
-            console.log("Initializing Database with initial students...");
-            const initialStudents = [
-                { id: "101", name: "יוסי כהן", balance: 50 },
-                { id: "102", name: "דני לוי", balance: 120 },
-                { id: "103", name: "אריאל מזרחי", balance: 85 }
-            ];
-            await Student.insertMany(initialStudents);
-            console.log("Database initialization complete.");
-        }
-        
-        // אתחול מורה מוגן
+        // אתחול מורה מוגן (לא יופיע ברשימה)
         const protectedTeacher = await Teacher.findOne({ email: PROTECTED_EMAIL });
         if (!protectedTeacher) {
             const newProtectedTeacher = new Teacher({
                 password: PROTECTED_PASSWORD,
-                name: "מורה ראשי",
+                name: "מנהל מערכת",
                 email: PROTECTED_EMAIL,
                 isProtected: true
             });
             await newProtectedTeacher.save();
             console.log("Protected teacher account created.");
+        }
+
+        // אתחול הרב אליהו
+        const rabbiTeacher = await Teacher.findOne({ password: "הרב אליהו 123" });
+        if (!rabbiTeacher) {
+            const newRabbiTeacher = new Teacher({
+                password: "הרב אליהו 123",
+                name: "הרב אליהו",
+                email: "",
+                isProtected: false
+            });
+            await newRabbiTeacher.save();
+            console.log("Rabbi Eliyahu teacher account created.");
         }
     } catch (error) {
         console.error("Error initializing database:", error);
@@ -542,10 +543,11 @@ app.post('/api/change-student-code', async (req, res) => {
     }
 });
 
-// 18. קבלת רשימת מורים
+// 18. קבלת רשימת מורים (ללא החשבון המוגן)
 app.get('/api/teachers', async (req, res) => {
     try {
-        const teachers = await Teacher.find({}).select('password name email isProtected createdAt').sort({ createdAt: -1 });
+        // מחזיר רק מורים שאינם מוגנים
+        const teachers = await Teacher.find({ isProtected: false }).select('password name email createdAt').sort({ createdAt: -1 });
         res.json(teachers);
     } catch (error) {
         console.error("Get teachers error:", error);
