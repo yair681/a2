@@ -2,12 +2,14 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
+const path = require('path'); // הוספת מודול path
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- הגדרות וחיבור למסד הנתונים ---
 app.use(bodyParser.json());
-app.use(express.static(__dirname)); // FIX: Serving static files from the current directory
+// תיקון: מגיש קבצים סטטיים מהתיקייה הנוכחית
+app.use(express.static(__dirname));
 
 const mongoURI = process.env.MONGO_URI; 
 if (!mongoURI) {
@@ -80,6 +82,28 @@ async function initDB() {
 mongoose.connection.on('connected', initDB);
 
 // --- נתיבים (Routes) ---
+
+// נתיב ראשי
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// נתיבים ספציפיים לקבצי HTML
+app.get('/admin.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+app.get('/student.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'student.html'));
+});
+
+app.get('/shop-admin.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'shop-admin.html'));
+});
+
+app.get('/shop-student.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'shop-student.html'));
+});
 
 // 1. התחברות
 app.post('/api/login', async (req, res) => {
