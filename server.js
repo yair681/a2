@@ -6,8 +6,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- הגדרות וחיבור למסד הנתונים ---
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static('public'));
 
 const mongoURI = process.env.MONGO_URI; 
