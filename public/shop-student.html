@@ -69,10 +69,15 @@
             border-radius: 12px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             transition: transform 0.3s, box-shadow 0.3s;
+            position: relative;
         }
         .product-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+        .product-card.out-of-stock {
+            opacity: 0.6;
+            background-color: #f8f9fa;
         }
         .product-image {
             width: 100%;
@@ -96,7 +101,27 @@
             font-size: 1.5em;
             font-weight: bold;
             color: #28a745;
+            margin-bottom: 10px;
+        }
+        .stock-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
             margin-bottom: 15px;
+        }
+        .stock-low {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .stock-out {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .stock-ok {
+            background-color: #d4edda;
+            color: #155724;
         }
         .btn {
             width: 100%;
@@ -184,7 +209,7 @@
 <body>
     <div class="header">
         <div>
-            <h2>חנות הכיתה 🏪</h2>
+            <h2>חנות הכיתה 🛒</h2>
             <div>היתרה שלך: <span id="balanceDisplay" class="balance-display">---</span> נקודות</div>
         </div>
         <button class="back-btn" onclick="window.location.href='student.html'">חזרה לארנק</button>
@@ -262,8 +287,14 @@
             grid.innerHTML = '';
             products.forEach(p => {
                 const canAfford = currentBalance >= p.price;
+                const inStock = p.stock > 0;
+                const canBuy = canAfford && inStock;
+                
                 const div = document.createElement('div');
                 div.className = 'product-card';
+                if (!inStock) {
+                    div.className += ' out-of-stock';
+                }
                 
                 // הוספת תמונה אם קיימת
                 let imageHTML = '';
@@ -271,15 +302,37 @@
                     imageHTML = `<img src="${p.image}" class="product-image" alt="${p.name}">`;
                 }
                 
+                // תג מלאי
+                let stockBadge = '';
+                if (p.stock === 0) {
+                    stockBadge = '<div class="stock-badge stock-out">❌ אזל מהמלאי</div>';
+                } else if (p.stock <= 5) {
+                    stockBadge = `<div class="stock-badge stock-low">⚠️ נותרו ${p.stock} בלבד!</div>`;
+                } else {
+                    stockBadge = `<div class="stock-badge stock-ok">✅ במלאי (${p.stock} יחידות)</div>`;
+                }
+                
+                // כפתור קנייה
+                let buttonText = '🛒 קנה עכשיו';
+                let buttonDisabled = '';
+                if (!inStock) {
+                    buttonText = '❌ אזל מהמלאי';
+                    buttonDisabled = 'disabled';
+                } else if (!canAfford) {
+                    buttonText = '💰 אין מספיק נקודות';
+                    buttonDisabled = 'disabled';
+                }
+                
                 div.innerHTML = `
                     ${imageHTML}
                     <div class="product-name">${p.name}</div>
                     <div class="product-description">${p.description || 'מוצר נהדר!'}</div>
                     <div class="product-price">${p.price} נקודות</div>
+                    ${stockBadge}
                     <button class="btn btn-buy" 
                             onclick="buyProduct('${p._id}', '${p.name}', ${p.price})" 
-                            ${!canAfford ? 'disabled' : ''}>
-                        ${canAfford ? '🛒 קנה עכשיו' : '💰 אין מספיק נקודות'}
+                            ${buttonDisabled}>
+                        ${buttonText}
                     </button>
                 `;
                 grid.appendChild(div);
@@ -287,7 +340,7 @@
         }
 
         async function buyProduct(productId, productName, price) {
-            if (!confirm(`האם אתה בטוח שברצונך לרכוש את "${productName}" ב-${price} נקודות?\n\nהקנייה תישלח למורה לאישור.`)) {
+            if (!confirm(`האם אתה בטוח שברצונך לרכוש את "${productName}" ב-${price} נקודות?\n\nהקניה תישלח למורה לאישור.`)) {
                 return;
             }
 
@@ -315,7 +368,7 @@
             const list = document.getElementById('purchasesList');
 
             if (purchases.length === 0) {
-                list.innerHTML = '<div style="background: white; padding: 30px; border-radius: 12px; text-align: center; color: #6c757d;">עדיין לא ביצעת קניות 🛍️</div>';
+                list.innerHTML = '<div style="background: white; padding: 30px; border-radius: 12px; text-align: center; color: #6c757d;">עדיין לא בצעת קניות 🛍️</div>';
                 return;
             }
 
@@ -331,10 +384,10 @@
                     statusText = 'הבקשה שלך נשלחה למורה ומחכה לאישור';
                 } else if (p.status === 'approved') {
                     statusBadge = '<span class="status-badge status-approved">✓ אושר</span>';
-                    statusText = 'הקנייה אושרה! תוכל לקבל את המוצר מהמורה';
+                    statusText = 'הקניה אושרה! תוכל לקבל את המוצר מהמורה';
                 } else if (p.status === 'rejected') {
                     statusBadge = '<span class="status-badge status-rejected">✗ נדחה</span>';
-                    statusText = 'הקנייה נדחתה על ידי המורה';
+                    statusText = 'הקניה נדחתה על ידי המורה';
                 }
 
                 div.innerHTML = `
@@ -360,6 +413,7 @@
         // רענון יתרה וקניות כל 30 שניות
         setInterval(() => {
             loadBalance();
+            loadProducts(); // רענון גם של המוצרים כדי לעדכן מלאי
             if (document.getElementById('purchasesTab').classList.contains('active')) {
                 loadMyPurchases();
             }
