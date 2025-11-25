@@ -32,18 +32,19 @@ const studentSchema = new mongoose.Schema({
 
 const Student = mongoose.model('Student', studentSchema);
 
-// --- הגדרת המבנה של מוצר בחנות (שמירת תמונה כ-Base64) ---
+// --- הגדרת המבנה של מוצר בחנות (עם מלאי) ---
 const productSchema = new mongoose.Schema({
     name: { type: String, required: true },
     price: { type: Number, required: true },
     description: String,
-    image: String, // שומר את התמונה כ-Base64 string
+    image: String,
+    stock: { type: Number, default: 0 }, // מלאי המוצר
     createdAt: { type: Date, default: Date.now }
 });
 
 const Product = mongoose.model('Product', productSchema);
 
-// --- הגדרת המבנה של קנייה ---
+// --- הגדרת המבנה של קניה ---
 const purchaseSchema = new mongoose.Schema({
     studentId: { type: String, required: true },
     studentName: { type: String, required: true },
@@ -259,21 +260,21 @@ app.post('/api/my-balance', async (req, res) => {
 
 // --- API לחנות ---
 
-// 7. יצירת מוצר חדש (למורה) - שומר תמונה כ-Base64 ישירות ב-MongoDB
+// 7. יצירת מוצר חדש (למורה) - כולל מלאי
 app.post('/api/products', async (req, res) => {
     try {
-        const { name, price, description, image } = req.body;
+        const { name, price, description, image, stock } = req.body;
         
         if (!name || !price) {
             return res.json({ success: false, message: "שם ומחיר הן שדות חובה" });
         }
 
-        // שמירת התמונה כ-Base64 ישירות במסד הנתונים
         const newProduct = new Product({
             name,
             price: parseInt(price),
             description: description || '',
-            image: image || null // שומר את ה-Base64 string ישירות
+            image: image || null,
+            stock: parseInt(stock) || 0 // הוספת מלאי
         });
 
         await newProduct.save();
@@ -306,7 +307,7 @@ app.delete('/api/products/:id', async (req, res) => {
     }
 });
 
-// 10. בקשת קנייה (תלמיד)
+// 10. בקשת קניה (תלמיד) - בדיקת מלאי
 app.post('/api/purchase', async (req, res) => {
     try {
         const { studentId, productId } = req.body;
@@ -326,6 +327,11 @@ app.post('/api/purchase', async (req, res) => {
             return res.json({ success: false, message: "מוצר לא נמצא" });
         }
         
+        // בדיקת מלאי
+        if (product.stock <= 0) {
+            return res.json({ success: false, message: "המוצר אזל מהמלאי" });
+        }
+        
         if (student.balance < product.price) {
             return res.json({ success: false, message: "אין מספיק נקודות לרכישה" });
         }
@@ -343,7 +349,7 @@ app.post('/api/purchase', async (req, res) => {
         res.json({ success: true, message: "הבקשה נשלחה למורה לאישור", purchase: newPurchase });
     } catch (error) {
         console.error("Purchase error:", error);
-        res.json({ success: false, message: "שגיאה ביצירת הקנייה" });
+        res.json({ success: false, message: "שגיאה ביצירת הקניה" });
     }
 });
 
@@ -369,46 +375,62 @@ app.get('/api/purchases/:studentId', async (req, res) => {
     }
 });
 
-// 13. אישור/דחיית קנייה (מורה)
+// 13. אישור/דחיית קניה (מורה) - הורדת מלאי
 app.post('/api/purchases/:id/approve', async (req, res) => {
     try {
         const { approve } = req.body;
         
         const purchase = await Purchase.findById(req.params.id);
         if (!purchase) {
-            return res.json({ success: false, message: "קנייה לא נמצאה" });
+            return res.json({ success: false, message: "קניה לא נמצאה" });
         }
         
         if (purchase.status !== 'pending') {
-            return res.json({ success: false, message: "הקנייה כבר טופלה" });
+            return res.json({ success: false, message: "הקניה כבר טופלה" });
         }
         
         if (approve) {
             const student = await Student.findOne({ id: purchase.studentId });
+            const product = await Product.findById(purchase.productId);
+            
             if (!student) {
                 return res.json({ success: false, message: "תלמיד לא נמצא" });
+            }
+            
+            if (!product) {
+                return res.json({ success: false, message: "מוצר לא נמצא" });
+            }
+            
+            // בדיקת מלאי
+            if (product.stock <= 0) {
+                return res.json({ success: false, message: "המוצר אזל מהמלאי" });
             }
             
             if (student.balance < purchase.price) {
                 return res.json({ success: false, message: "לתלמיד אין מספיק נקודות" });
             }
             
+            // הורדת נקודות מהתלמיד
             student.balance -= purchase.price;
             await student.save();
+            
+            // הורדת מלאי מהמוצר
+            product.stock -= 1;
+            await product.save();
             
             purchase.status = 'approved';
             purchase.approvedAt = new Date();
             await purchase.save();
             
-            res.json({ success: true, message: "הקנייה אושרה והנקודות הורדו" });
+            res.json({ success: true, message: "הקניה אושרה והנקודות הורדו" });
         } else {
             purchase.status = 'rejected';
             await purchase.save();
-            res.json({ success: true, message: "הקנייה נדחתה" });
+            res.json({ success: true, message: "הקניה נדחתה" });
         }
     } catch (error) {
         console.error("Approve purchase error:", error);
-        res.json({ success: false, message: "שגיאה בעיבוד הקנייה" });
+        res.json({ success: false, message: "שגיאה בעיבוד הקניה" });
     }
 });
 
@@ -438,7 +460,7 @@ app.delete('/api/purchases', async (req, res) => {
         const result = await Purchase.deleteMany({});
         res.json({ 
             success: true, 
-            message: `נמחקו ${result.deletedCount} רשומות קנייה בהצלחה` 
+            message: `נמחקו ${result.deletedCount} רשומות קניה בהצלחה` 
         });
     } catch (error) {
         console.error("Delete all purchases error:", error);
@@ -469,6 +491,32 @@ app.post('/api/set-balance', async (req, res) => {
     } catch (error) {
         console.error("Set balance error:", error);
         res.json({ success: false, message: 'שגיאה בעדכון היתרה' });
+    }
+});
+
+// 17. עדכון מלאי מוצר (חדש!)
+app.post('/api/products/:id/stock', async (req, res) => {
+    try {
+        const { stock } = req.body;
+        
+        if (stock === undefined || stock < 0) {
+            return res.json({ success: false, message: 'מלאי לא תקין' });
+        }
+        
+        const product = await Product.findByIdAndUpdate(
+            req.params.id,
+            { stock: parseInt(stock) },
+            { new: true }
+        );
+
+        if (product) {
+            res.json({ success: true, newStock: product.stock, message: 'המלאי עודכן בהצלחה' });
+        } else {
+            res.json({ success: false, message: 'מוצר לא נמצא' });
+        }
+    } catch (error) {
+        console.error("Update stock error:", error);
+        res.json({ success: false, message: 'שגיאה בעדכון המלאי' });
     }
 });
 
