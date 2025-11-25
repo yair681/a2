@@ -2,8 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
-const path = require('path');
-const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -11,7 +9,6 @@ const PORT = process.env.PORT || 3000;
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
 
 const mongoURI = process.env.MONGO_URI; 
 if (!mongoURI) {
@@ -35,12 +32,12 @@ const studentSchema = new mongoose.Schema({
 
 const Student = mongoose.model('Student', studentSchema);
 
-// --- הגדרת המבנה של מוצר בחנות ---
+// --- הגדרת המבנה של מוצר בחנות (שמירת תמונה כ-Base64) ---
 const productSchema = new mongoose.Schema({
     name: { type: String, required: true },
     price: { type: Number, required: true },
     description: String,
-    image: String,
+    image: String, // שומר את התמונה כ-Base64 string
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -111,11 +108,9 @@ app.post('/api/login', async (req, res) => {
         }
 
         if (type === 'admin') {
-            // בדיקה ראשונה - סיסמת מורה ראשי
             if (code === ADMIN_PASSWORD) {
                 return res.json({ success: true, role: 'admin' });
             } else {
-                // בדיקה שנייה - מורים נוספים
                 const teacher = await Teacher.findOne({ password: code });
                 if (teacher) {
                     return res.json({ success: true, role: 'admin', teacherName: teacher.name });
@@ -185,7 +180,7 @@ app.post('/api/create-student', async (req, res) => {
         const { id, name, balance } = req.body;
         
         if (!id || !name) {
-            return res.json({ success: false, message: "קוד ושם תלמיד הם שדות חובה" });
+            return res.json({ success: false, message: "קוד ושם תלמיד הן שדות חובה" });
         }
         
         const existingStudent = await Student.findOne({ id: id });
@@ -216,13 +211,11 @@ app.post('/api/create-teacher', async (req, res) => {
             return res.json({ success: false, message: "סיסמה היא שדה חובה" });
         }
 
-        // בדיקה שהסיסמה לא קיימת
         const existingTeacher = await Teacher.findOne({ password: password });
         if (existingTeacher) {
             return res.json({ success: false, message: "סיסמה זו כבר קיימת במערכת" });
         }
         
-        // בדיקה שהסיסמה לא זהה לסיסמת המורה הראשי
         if (password === ADMIN_PASSWORD) {
             return res.json({ success: false, message: "לא ניתן להשתמש בסיסמת המורה הראשי" });
         }
@@ -266,41 +259,21 @@ app.post('/api/my-balance', async (req, res) => {
 
 // --- API לחנות ---
 
-// 7. יצירת מוצר חדש (למורה)
+// 7. יצירת מוצר חדש (למורה) - שומר תמונה כ-Base64 ישירות ב-MongoDB
 app.post('/api/products', async (req, res) => {
     try {
         const { name, price, description, image } = req.body;
         
         if (!name || !price) {
-            return res.json({ success: false, message: "שם ומחיר הם שדות חובה" });
+            return res.json({ success: false, message: "שם ומחיר הן שדות חובה" });
         }
 
-        let imagePath = null;
-        
-        // אם יש תמונה, שמור אותה
-        if (image && image.startsWith('data:image')) {
-            try {
-                const matches = image.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
-                if (matches) {
-                    const ext = matches[1];
-                    const data = matches[2];
-                    const filename = `product_${Date.now()}.${ext}`;
-                    const filepath = path.join(__dirname, 'uploads', filename);
-                    
-                    fs.writeFileSync(filepath, Buffer.from(data, 'base64'));
-                    imagePath = `/uploads/${filename}`;
-                }
-            } catch (imgError) {
-                console.error("Image save error:", imgError);
-                // נמשיך גם אם השמירה נכשלה
-            }
-        }
-
+        // שמירת התמונה כ-Base64 ישירות במסד הנתונים
         const newProduct = new Product({
             name,
             price: parseInt(price),
             description: description || '',
-            image: imagePath
+            image: image || null // שומר את ה-Base64 string ישירות
         });
 
         await newProduct.save();
@@ -325,20 +298,6 @@ app.get('/api/products', async (req, res) => {
 // 9. מחיקת מוצר
 app.delete('/api/products/:id', async (req, res) => {
     try {
-        const product = await Product.findById(req.params.id);
-        
-        // מחיקת קובץ התמונה אם קיים
-        if (product && product.image) {
-            try {
-                const imagePath = path.join(__dirname, product.image);
-                if (fs.existsSync(imagePath)) {
-                    fs.unlinkSync(imagePath);
-                }
-            } catch (fsError) {
-                console.error("Image delete error:", fsError);
-            }
-        }
-        
         await Product.findByIdAndDelete(req.params.id);
         res.json({ success: true, message: "המוצר נמחק בהצלחה" });
     } catch (error) {
@@ -425,7 +384,6 @@ app.post('/api/purchases/:id/approve', async (req, res) => {
         }
         
         if (approve) {
-            // אישור - הורדת נקודות
             const student = await Student.findOne({ id: purchase.studentId });
             if (!student) {
                 return res.json({ success: false, message: "תלמיד לא נמצא" });
@@ -444,7 +402,6 @@ app.post('/api/purchases/:id/approve', async (req, res) => {
             
             res.json({ success: true, message: "הקנייה אושרה והנקודות הורדו" });
         } else {
-            // דחייה
             purchase.status = 'rejected';
             await purchase.save();
             res.json({ success: true, message: "הקנייה נדחתה" });
@@ -460,14 +417,12 @@ app.delete('/api/students/:id', async (req, res) => {
     try {
         const studentId = req.params.id;
         
-        // מחיקת התלמיד
         const deletedStudent = await Student.findOneAndDelete({ id: studentId });
         
         if (!deletedStudent) {
             return res.json({ success: false, message: "תלמיד לא נמצא" });
         }
         
-        // מחיקת כל הקניות של התלמיד
         await Purchase.deleteMany({ studentId: studentId });
         
         res.json({ success: true, message: `התלמיד ${deletedStudent.name} נמחק בהצלחה` });
