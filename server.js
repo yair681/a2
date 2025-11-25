@@ -2,12 +2,16 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
+const path = require('path');
+const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- הגדרות וחיבור למסד הנתונים ---
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static('public'));
+app.use('/uploads', express.static('uploads'));
 
 const mongoURI = process.env.MONGO_URI; 
 if (!mongoURI) {
@@ -31,12 +35,12 @@ const studentSchema = new mongoose.Schema({
 
 const Student = mongoose.model('Student', studentSchema);
 
-// --- הגדרת המבנה של מוצר בחנות (עם מלאי) ---
+// --- הגדרת המבנה של מוצר בחנות ---
 const productSchema = new mongoose.Schema({
     name: { type: String, required: true },
     price: { type: Number, required: true },
     description: String,
-    stock: { type: Number, default: 0 }, // מלאי
+    image: String,
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -107,9 +111,11 @@ app.post('/api/login', async (req, res) => {
         }
 
         if (type === 'admin') {
+            // בדיקה ראשונה - סיסמת מורה ראשי
             if (code === ADMIN_PASSWORD) {
                 return res.json({ success: true, role: 'admin' });
             } else {
+                // בדיקה שנייה - מורים נוספים
                 const teacher = await Teacher.findOne({ password: code });
                 if (teacher) {
                     return res.json({ success: true, role: 'admin', teacherName: teacher.name });
@@ -179,7 +185,7 @@ app.post('/api/create-student', async (req, res) => {
         const { id, name, balance } = req.body;
         
         if (!id || !name) {
-            return res.json({ success: false, message: "קוד ושם תלמיד הן שדות חובה" });
+            return res.json({ success: false, message: "קוד ושם תלמיד הם שדות חובה" });
         }
         
         const existingStudent = await Student.findOne({ id: id });
@@ -207,14 +213,16 @@ app.post('/api/create-teacher', async (req, res) => {
         const { password, name } = req.body;
         
         if (!password) {
-            return res.json({ success: false, message: "סיסמה הינה שדה חובה" });
+            return res.json({ success: false, message: "סיסמה היא שדה חובה" });
         }
 
+        // בדיקה שהסיסמה לא קיימת
         const existingTeacher = await Teacher.findOne({ password: password });
         if (existingTeacher) {
             return res.json({ success: false, message: "סיסמה זו כבר קיימת במערכת" });
         }
         
+        // בדיקה שהסיסמה לא זהה לסיסמת המורה הראשי
         if (password === ADMIN_PASSWORD) {
             return res.json({ success: false, message: "לא ניתן להשתמש בסיסמת המורה הראשי" });
         }
@@ -258,20 +266,41 @@ app.post('/api/my-balance', async (req, res) => {
 
 // --- API לחנות ---
 
-// 7. יצירת מוצר חדש (למורה) - עם מלאי
+// 7. יצירת מוצר חדש (למורה)
 app.post('/api/products', async (req, res) => {
     try {
-        const { name, price, description, stock } = req.body;
+        const { name, price, description, image } = req.body;
         
-        if (!name || !price || stock === undefined) {
-            return res.json({ success: false, message: "שם, מחיר ומלאי הן שדות חובה" });
+        if (!name || !price) {
+            return res.json({ success: false, message: "שם ומחיר הם שדות חובה" });
+        }
+
+        let imagePath = null;
+        
+        // אם יש תמונה, שמור אותה
+        if (image && image.startsWith('data:image')) {
+            try {
+                const matches = image.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+                if (matches) {
+                    const ext = matches[1];
+                    const data = matches[2];
+                    const filename = `product_${Date.now()}.${ext}`;
+                    const filepath = path.join(__dirname, 'uploads', filename);
+                    
+                    fs.writeFileSync(filepath, Buffer.from(data, 'base64'));
+                    imagePath = `/uploads/${filename}`;
+                }
+            } catch (imgError) {
+                console.error("Image save error:", imgError);
+                // נמשיך גם אם השמירה נכשלה
+            }
         }
 
         const newProduct = new Product({
             name,
             price: parseInt(price),
             description: description || '',
-            stock: parseInt(stock)
+            image: imagePath
         });
 
         await newProduct.save();
@@ -296,6 +325,20 @@ app.get('/api/products', async (req, res) => {
 // 9. מחיקת מוצר
 app.delete('/api/products/:id', async (req, res) => {
     try {
+        const product = await Product.findById(req.params.id);
+        
+        // מחיקת קובץ התמונה אם קיים
+        if (product && product.image) {
+            try {
+                const imagePath = path.join(__dirname, product.image);
+                if (fs.existsSync(imagePath)) {
+                    fs.unlinkSync(imagePath);
+                }
+            } catch (fsError) {
+                console.error("Image delete error:", fsError);
+            }
+        }
+        
         await Product.findByIdAndDelete(req.params.id);
         res.json({ success: true, message: "המוצר נמחק בהצלחה" });
     } catch (error) {
@@ -304,33 +347,7 @@ app.delete('/api/products/:id', async (req, res) => {
     }
 });
 
-// 9.5 עדכון מלאי מוצר
-app.post('/api/products/:id/stock', async (req, res) => {
-    try {
-        const { stock } = req.body;
-        
-        if (stock === undefined || stock < 0) {
-            return res.json({ success: false, message: "מלאי לא תקין" });
-        }
-
-        const updatedProduct = await Product.findByIdAndUpdate(
-            req.params.id,
-            { stock: parseInt(stock) },
-            { new: true }
-        );
-
-        if (updatedProduct) {
-            res.json({ success: true, message: "המלאי עודכן בהצלחה", product: updatedProduct });
-        } else {
-            res.json({ success: false, message: "מוצר לא נמצא" });
-        }
-    } catch (error) {
-        console.error("Update stock error:", error);
-        res.json({ success: false, message: "שגיאה בעדכון המלאי" });
-    }
-});
-
-// 10. בקשת קנייה (תלמיד) - בודק מלאי
+// 10. בקשת קנייה (תלמיד)
 app.post('/api/purchase', async (req, res) => {
     try {
         const { studentId, productId } = req.body;
@@ -348,11 +365,6 @@ app.post('/api/purchase', async (req, res) => {
         
         if (!product) {
             return res.json({ success: false, message: "מוצר לא נמצא" });
-        }
-        
-        // בדיקת מלאי
-        if (product.stock <= 0) {
-            return res.json({ success: false, message: "המוצר אזל מהמלאי" });
         }
         
         if (student.balance < product.price) {
@@ -398,7 +410,7 @@ app.get('/api/purchases/:studentId', async (req, res) => {
     }
 });
 
-// 13. אישור/דחיית קנייה (מורה) - מעדכן מלאי
+// 13. אישור/דחיית קנייה (מורה)
 app.post('/api/purchases/:id/approve', async (req, res) => {
     try {
         const { approve } = req.body;
@@ -413,40 +425,24 @@ app.post('/api/purchases/:id/approve', async (req, res) => {
         }
         
         if (approve) {
-            // אישור - הורדת נקודות והורדת מלאי
+            // אישור - הורדת נקודות
             const student = await Student.findOne({ id: purchase.studentId });
-            const product = await Product.findById(purchase.productId);
-            
             if (!student) {
                 return res.json({ success: false, message: "תלמיד לא נמצא" });
-            }
-            
-            if (!product) {
-                return res.json({ success: false, message: "מוצר לא נמצא" });
-            }
-            
-            // בדיקת מלאי שוב
-            if (product.stock <= 0) {
-                return res.json({ success: false, message: "המוצר אזל מהמלאי" });
             }
             
             if (student.balance < purchase.price) {
                 return res.json({ success: false, message: "לתלמיד אין מספיק נקודות" });
             }
             
-            // הורדת נקודות
             student.balance -= purchase.price;
             await student.save();
-            
-            // הורדת מלאי
-            product.stock -= 1;
-            await product.save();
             
             purchase.status = 'approved';
             purchase.approvedAt = new Date();
             await purchase.save();
             
-            res.json({ success: true, message: "הקנייה אושרה והנקודות הורדו. המלאי עודכן." });
+            res.json({ success: true, message: "הקנייה אושרה והנקודות הורדו" });
         } else {
             // דחייה
             purchase.status = 'rejected';
@@ -464,12 +460,14 @@ app.delete('/api/students/:id', async (req, res) => {
     try {
         const studentId = req.params.id;
         
+        // מחיקת התלמיד
         const deletedStudent = await Student.findOneAndDelete({ id: studentId });
         
         if (!deletedStudent) {
             return res.json({ success: false, message: "תלמיד לא נמצא" });
         }
         
+        // מחיקת כל הקניות של התלמיד
         await Purchase.deleteMany({ studentId: studentId });
         
         res.json({ success: true, message: `התלמיד ${deletedStudent.name} נמחק בהצלחה` });
