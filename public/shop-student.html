@@ -69,14 +69,17 @@
             border-radius: 12px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             transition: transform 0.3s, box-shadow 0.3s;
-            position: relative;
         }
         .product-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 8px 20px rgba(0,0,0,0.15);
         }
-        .product-card.out-of-stock {
-            opacity: 0.6;
+        .product-image {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 15px;
         }
         .product-name {
             font-size: 1.3em;
@@ -93,32 +96,7 @@
             font-size: 1.5em;
             font-weight: bold;
             color: #28a745;
-            margin-bottom: 10px;
-        }
-        .product-stock {
-            font-size: 0.9em;
             margin-bottom: 15px;
-            font-weight: bold;
-        }
-        .stock-ok {
-            color: #28a745;
-        }
-        .stock-low {
-            color: #ffc107;
-        }
-        .stock-out {
-            color: #dc3545;
-        }
-        .out-of-stock-badge {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background-color: #dc3545;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 0.85em;
-            font-weight: bold;
         }
         .btn {
             width: 100%;
@@ -213,7 +191,7 @@
     </div>
 
     <div class="tabs">
-        <button class="tab active" onclick="showTab('shop')">🛒 קנה עכשיו</button>
+        <button class="tab active" onclick="showTab('shop')">🛍️ קנה עכשיו</button>
         <button class="tab" onclick="showTab('purchases')">📦 הקניות שלי</button>
     </div>
 
@@ -284,40 +262,24 @@
             grid.innerHTML = '';
             products.forEach(p => {
                 const canAfford = currentBalance >= p.price;
-                const inStock = p.stock > 0;
-                const canBuy = canAfford && inStock;
-                
-                let stockClass = 'stock-ok';
-                let stockText = `${p.stock} יחידות במלאי ✓`;
-                
-                if (p.stock === 0) {
-                    stockClass = 'stock-out';
-                    stockText = 'אזל מהמלאי ❌';
-                } else if (p.stock <= 5) {
-                    stockClass = 'stock-low';
-                    stockText = `נותרו רק ${p.stock} יחידות! ⚠️`;
-                }
-                
                 const div = document.createElement('div');
-                div.className = 'product-card' + (p.stock === 0 ? ' out-of-stock' : '');
+                div.className = 'product-card';
                 
-                let buttonText = '🛒 קנה עכשיו';
-                if (!inStock) {
-                    buttonText = '❌ אזל מהמלאי';
-                } else if (!canAfford) {
-                    buttonText = '💰 אין מספיק נקודות';
+                // הוספת תמונה אם קיימת
+                let imageHTML = '';
+                if (p.image) {
+                    imageHTML = `<img src="${p.image}" class="product-image" alt="${p.name}">`;
                 }
                 
                 div.innerHTML = `
-                    ${p.stock === 0 ? '<div class="out-of-stock-badge">אזל</div>' : ''}
+                    ${imageHTML}
                     <div class="product-name">${p.name}</div>
                     <div class="product-description">${p.description || 'מוצר נהדר!'}</div>
                     <div class="product-price">${p.price} נקודות</div>
-                    <div class="product-stock ${stockClass}">${stockText}</div>
                     <button class="btn btn-buy" 
                             onclick="buyProduct('${p._id}', '${p.name}', ${p.price})" 
-                            ${!canBuy ? 'disabled' : ''}>
-                        ${buttonText}
+                            ${!canAfford ? 'disabled' : ''}>
+                        ${canAfford ? '🛒 קנה עכשיו' : '💰 אין מספיק נקודות'}
                     </button>
                 `;
                 grid.appendChild(div);
@@ -353,7 +315,7 @@
             const list = document.getElementById('purchasesList');
 
             if (purchases.length === 0) {
-                list.innerHTML = '<div style="background: white; padding: 30px; border-radius: 12px; text-align: center; color: #6c757d;">עדיין לא בצעת קניות 🛒</div>';
+                list.innerHTML = '<div style="background: white; padding: 30px; border-radius: 12px; text-align: center; color: #6c757d;">עדיין לא ביצעת קניות 🛍️</div>';
                 return;
             }
 
@@ -398,7 +360,6 @@
         // רענון יתרה וקניות כל 30 שניות
         setInterval(() => {
             loadBalance();
-            loadProducts(); // רענון גם המוצרים כדי לעדכן מלאי
             if (document.getElementById('purchasesTab').classList.contains('active')) {
                 loadMyPurchases();
             }
