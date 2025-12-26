@@ -234,8 +234,10 @@
     <script>
         const studentCode = localStorage.getItem('studentCode');
         const studentName = localStorage.getItem('studentName');
+        const classId = localStorage.getItem('classId');
+        const className = localStorage.getItem('className');
         
-        if (!studentCode) {
+        if (!studentCode || !classId) {
             window.location.href = 'index.html';
         }
 
@@ -275,7 +277,7 @@
         }
 
         async function loadProducts() {
-            const res = await fetch('/api/products');
+            const res = await fetch(`/api/products/${classId}`);
             const products = await res.json();
             const grid = document.getElementById('productsGrid');
 
@@ -349,7 +351,8 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     studentId: studentCode,
-                    productId: productId
+                    productId: productId,
+                    classId: classId
                 })
             });
             const data = await res.json();
@@ -363,7 +366,7 @@
         }
 
         async function loadMyPurchases() {
-            const res = await fetch(`/api/purchases/${studentCode}`);
+            const res = await fetch(`/api/purchases/${classId}/${studentCode}`);
             const purchases = await res.json();
             const list = document.getElementById('purchasesList');
 
