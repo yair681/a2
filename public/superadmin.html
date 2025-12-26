@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>ניהול כיתות - מנהל-על</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            padding: 30px; 
+            background-color: #f4f6f9; 
+            direction: rtl; 
+            color: #333;
+        }
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 30px; 
+            padding-bottom: 15px;
+            border-bottom: 2px solid #ddd;
+        }
+        .header h2 { 
+            color: #007bff; 
+            margin: 0;
+        }
+        .welcome {
+            font-size: 1.1em;
+            color: #666;
+        }
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 30px;
+        }
+        .card { 
+            background: white; 
+            padding: 25px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08); 
+        }
+        input { 
+            width: 100%; 
+            padding: 10px; 
+            margin-bottom: 15px; 
+            border: 1px solid #ccc; 
+            border-radius: 6px; 
+            box-sizing: border-box;
+        }
+        .btn-primary { 
+            background-color: #28a745; 
+            color: white; 
+            border: none; 
+            padding: 10px 15px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            width: 100%;
+        }
+        .btn-primary:hover { 
+            background-color: #218838; 
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+        .btn-info {
+            background-color: #17a2b8;
+            color: white;
+        }
+        .btn-info:hover {
+            background-color: #138496;
+        }
+        .class-row { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 1px solid #eee; 
+            padding: 15px 0; 
+        }
+        .class-row:last-child { 
+            border-bottom: none; 
+        }
+        .class-info { 
+            font-weight: 500;
+            flex: 1;
+        }
+        .class-name {
+            font-size: 1.2em;
+            margin-bottom: 5px;
+        }
+        .class-teacher {
+            color: #666;
+            font-size: 0.95em;
+        }
+        .actions {
+            display: flex;
+            gap: 5px;
+        }
+        .actions button { 
+            padding: 8px 12px; 
+            border-radius: 5px; 
+            border: none; 
+            cursor: pointer; 
+            color: white; 
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        .message { 
+            margin-top: 15px; 
+            padding: 10px; 
+            border-radius: 6px; 
+            text-align: center; 
+        }
+        .msg-success { 
+            background-color: #d4edda; 
+            color: #155724; 
+            border: 1px solid #c3e6cb; 
+        }
+        .msg-error { 
+            background-color: #f8d7da; 
+            color: #721c24; 
+            border: 1px solid #f5c6cb; 
+        }
+        .logout-btn {
+            background-color: #6c757d;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .logout-btn:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h2>ניהול כיתות - מנהל-על 👑</h2>
+            <div class="welcome">שלום <span id="adminName"></span></div>
+        </div>
+        <button class="logout-btn" onclick="logout()">יציאה</button>
+    </div>
+
+    <div class="content-grid">
+        <div class="card">
+            <h3>➕ יצירת כיתה חדשה</h3>
+            <input type="text" id="className" placeholder="שם הכיתה (למשל: כיתה ו' 1)">
+            <input type="text" id="teacherName" placeholder="שם המורה">
+            <input type="password" id="teacherPassword" placeholder="סיסמת המורה">
+            <button class="btn-primary" onclick="createClass()">צור כיתה</button>
+            <div id="createMessage"></div>
+        </div>
+
+        <div class="card">
+            <h3>רשימת כיתות במערכת</h3>
+            <div id="classesList"></div>
+            <div id="loading" style="text-align: center;">טוען נתונים...</div>
+        </div>
+    </div>
+
+    <script>
+        // בדיקת הרשאות
+        if (!localStorage.getItem('superadminAuth')) {
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('adminName').textContent = localStorage.getItem('superadminName') || '';
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'index.html';
+        }
+
+        function showMessage(elementId, message, isSuccess) {
+            const el = document.getElementById(elementId);
+            el.innerHTML = message;
+            el.className = 'message ' + (isSuccess ? 'msg-success' : 'msg-error');
+            setTimeout(() => { el.innerHTML = ''; el.className = ''; }, 3000);
+        }
+
+        async function createClass() {
+            const className = document.getElementById('className').value.trim();
+            const teacherName = document.getElementById('teacherName').value.trim();
+            const teacherPassword = document.getElementById('teacherPassword').value.trim();
+            
+            if (!className || !teacherName || !teacherPassword) {
+                showMessage('createMessage', 'נא למלא את כל השדות.', false);
+                return;
+            }
+
+            const res = await fetch('/api/classes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: className, teacherName, teacherPassword })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                showMessage('createMessage', data.message, true);
+                document.getElementById('className').value = '';
+                document.getElementById('teacherName').value = '';
+                document.getElementById('teacherPassword').value = '';
+                loadClasses();
+            } else {
+                showMessage('createMessage', data.message, false);
+            }
+        }
+
+        async function loadClasses() {
+            document.getElementById('loading').style.display = 'block';
+            const res = await fetch('/api/classes');
+            const classes = await res.json();
+            const list = document.getElementById('classesList');
+            list.innerHTML = '';
+            document.getElementById('loading').style.display = 'none';
+
+            if (classes.length === 0) {
+                list.innerHTML = '<p style="text-align: center; color: #6c757d;">עדיין אין כיתות במערכת.</p>';
+                return;
+            }
+
+            classes.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'class-row';
+                div.innerHTML = `
+                    <div class="class-info">
+                        <div class="class-name">${c.name}</div>
+                        <div class="class-teacher">מורה: ${c.teacherName}</div>
+                        <div class="class-teacher">סיסמת מורה: <strong style="color: #007bff; font-size: 1.1em;">${c.teacherPassword}</strong></div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-info" onclick="enterClass('${c._id}', '${c.name}')">כנס לכיתה</button>
+                        <button class="btn-danger" onclick="deleteClass('${c._id}', '${c.name}')">מחק</button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function enterClass(classId, className) {
+            // שמירת מצב מנהל-על
+            localStorage.setItem('superadminMode', 'true');
+            localStorage.setItem('classId', classId);
+            localStorage.setItem('className', className);
+            window.location.href = 'admin.html';
+        }
+
+        async function deleteClass(classId, className) {
+            if (!confirm(`האם אתה בטוח שברצונך למחוק את "${className}"?\n\nפעולה זו תמחק את כל התלמידים, המוצרים והקניות של הכיתה ולא ניתן לבטל אותה!`)) {
+                return;
+            }
+
+            const res = await fetch(`/api/classes/${classId}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                alert(data.message);
+                loadClasses();
+            } else {
+                alert('שגיאה: ' + data.message);
+            }
+        }
+
+        loadClasses();
+    </script>
+</body>
+</html>
