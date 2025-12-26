@@ -52,6 +52,17 @@
             color: #fdd835; /* הדגשה צהובה */
         }
 
+        /* שם הכיתה */
+        .class-badge {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            color: #a0a0a0;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+
         /* היתרה */
         .label {
             font-size: 0.9em;
@@ -73,7 +84,7 @@
             color: #fdd835;
         }
 
-        /* כפתור יציאה */
+        /* כפתורים */
         button { 
             background-color: #3a3a3a; 
             color: #e0e0e0; 
@@ -94,6 +105,7 @@
     <div class="wallet-card">
         <div class="chip"></div>
         <h2 id="greeting">שלום!</h2>
+        <div class="class-badge" id="classBadge"></div>
         
         <div class="label">יתרת נקודות נוכחית</div>
         <div class="amount">
@@ -104,30 +116,39 @@
     </div>
     
     <button onclick="window.location.href='shop-student.html'" style="background-color: #17a2b8; margin-bottom: 10px;">🛒 עבור לחנות</button>
-    <button onclick="window.location.href='index.html'">יציאה והתנתקות</button>
+    <button onclick="logout()">יציאה והתנתקות</button>
 
     <script>
+        const studentCode = localStorage.getItem('studentCode');
+        const studentName = localStorage.getItem('studentName');
+        const className = localStorage.getItem('className');
+        
+        if (!studentCode) {
+            window.location.href = 'index.html';
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'index.html';
+        }
+
         async function loadBalance() {
-            const name = localStorage.getItem('studentName');
-            const code = localStorage.getItem('studentCode');
-            
-            if(!code) {
-                window.location.href = 'index.html';
-                return; 
-            }
-            
-            document.getElementById('greeting').innerText = `שלום ${name}! כל הכבוד!`;
+            document.getElementById('greeting').innerText = `שלום ${studentName}! כל הכבוד!`;
+            document.getElementById('classBadge').innerText = className || '';
 
             const res = await fetch('/api/my-balance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code })
+                body: JSON.stringify({ code: studentCode })
             });
             const data = await res.json();
-            // שימוש ב-toLocaleString להצגת המספרים בצורה נכונה
             document.getElementById('balance').innerText = data.balance.toLocaleString('en-US'); 
         }
+
         loadBalance();
+        
+        // רענון יתרה כל 30 שניות
+        setInterval(loadBalance, 30000);
     </script>
 </body>
 </html>
