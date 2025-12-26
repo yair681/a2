@@ -24,6 +24,10 @@
             color: #007bff; 
             margin: 0;
         }
+        .class-info {
+            font-size: 1.1em;
+            color: #666;
+        }
         .content-grid {
             display: grid;
             grid-template-columns: 1fr 2fr;
@@ -168,37 +172,40 @@
             background-color: #28a745;
             color: white;
         }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .header-buttons button {
+            padding: 8px 15px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h2>מרכז בקרה - מורה 🧑‍🏫</h2>
         <div>
-            <button onclick="window.location.href='shop-admin.html'" style="background-color: #17a2b8; border-radius: 6px; padding: 8px 15px; margin-left: 10px; color: white; border: none; cursor: pointer;">ניהול חנות 🏪</button>
-            <button onclick="logout()" style="background-color: #6c757d; border-radius: 6px; padding: 8px 15px; color: white; border: none; cursor: pointer;">יציאה</button>
+            <h2>מרכז בקרה - מורה 🧑‍🏫</h2>
+            <div class="class-info">כיתה: <span id="className"></span></div>
+        </div>
+        <div class="header-buttons">
+            <button onclick="window.location.href='shop-admin.html'" style="background-color: #17a2b8;">ניהול חנות 🏪</button>
+            <button id="backBtn" onclick="backToSuperadmin()" style="background-color: #ffc107; color: #333; display: none;">חזרה לניהול כיתות</button>
+            <button onclick="logout()" style="background-color: #6c757d;">יציאה</button>
         </div>
     </div>
 
     <div class="content-grid">
         <div class="card">
-            <h3>⚡ יצירת משתמש חדש</h3>
-            <label>
-                <input type="radio" name="userType" value="student" checked onchange="toggleUserType()"> תלמיד
-                <input type="radio" name="userType" value="teacher" onchange="toggleUserType()" style="margin-right: 15px;"> מורה
-            </label>
-            <div id="studentForm">
-                <h4 style="margin-top: 15px;">יצירת תלמיד חדש</h4>
-                <input type="number" id="newId" placeholder="קוד תלמיד (למשל 104)" required>
-                <input type="text" id="newName" placeholder="שם מלא של התלמיד" required>
-                <input type="number" id="initialBalance" placeholder="יתרה התחלתית (ברירת מחדל: 0)" value="0">
-                <button class="btn-primary" onclick="createNewStudent()">צור תלמיד</button>
-            </div>
-            <div id="teacherForm" style="display: none;">
-                <h4 style="margin-top: 15px;">יצירת מורה חדש</h4>
-                <input type="text" id="teacherPassword" placeholder="סיסמת המורה החדש" required>
-                <input type="text" id="teacherName" placeholder="שם המורה (אופציונלי)">
-                <button class="btn-primary" onclick="createNewTeacher()">צור מורה</button>
-            </div>
+            <h3>⚡ הוספת תלמיד חדש</h3>
+            <input type="number" id="newId" placeholder="קוד תלמיד (למשל 104)" required>
+            <input type="text" id="newName" placeholder="שם מלא של התלמיד" required>
+            <input type="number" id="initialBalance" placeholder="יתרה התחלתית (ברירת מחדל: 0)" value="0">
+            <button class="btn-primary" onclick="createNewStudent()">צור תלמיד</button>
             <div id="creationMessage"></div>
             
             <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
@@ -229,15 +236,34 @@
     </div>
 
     <script>
-        // בקרת גישה פשוטה למורה
-        if (!localStorage.getItem('adminAuth')) {
+        // בקרת גישה
+        const classId = localStorage.getItem('classId');
+        const className = localStorage.getItem('className');
+        const isSuperadmin = localStorage.getItem('superadminMode') === 'true';
+        const isTeacher = localStorage.getItem('teacherAuth') === 'true';
+
+        if (!classId || (!isSuperadmin && !isTeacher)) {
             window.location.href = 'index.html';
+        }
+
+        document.getElementById('className').textContent = className || '';
+        
+        // הצגת כפתור חזרה למנהלי-על בלבד
+        if (isSuperadmin) {
+            document.getElementById('backBtn').style.display = 'inline-block';
         }
 
         let currentEditStudentId = null;
 
+        function backToSuperadmin() {
+            localStorage.removeItem('superadminMode');
+            localStorage.removeItem('classId');
+            localStorage.removeItem('className');
+            window.location.href = 'superadmin.html';
+        }
+
         function logout() {
-            localStorage.removeItem('adminAuth');
+            localStorage.clear();
             window.location.href = 'index.html';
         }
 
@@ -246,45 +272,6 @@
             el.innerHTML = message;
             el.className = isSuccess ? 'msg-success' : 'msg-error';
             setTimeout(() => { el.innerHTML = ''; el.className = ''; }, 3000);
-        }
-
-        function toggleUserType() {
-            const userType = document.querySelector('input[name="userType"]:checked').value;
-            const studentForm = document.getElementById('studentForm');
-            const teacherForm = document.getElementById('teacherForm');
-            
-            if (userType === 'student') {
-                studentForm.style.display = 'block';
-                teacherForm.style.display = 'none';
-            } else {
-                studentForm.style.display = 'none';
-                teacherForm.style.display = 'block';
-            }
-        }
-
-        async function createNewTeacher() {
-            const password = document.getElementById('teacherPassword').value;
-            const name = document.getElementById('teacherName').value;
-            
-            if (!password) {
-                showMessage('creationMessage', 'נא למלא סיסמה למורה.', false);
-                return;
-            }
-
-            const res = await fetch('/api/create-teacher', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password, name })
-            });
-            const data = await res.json();
-            
-            if (data.success) {
-                showMessage('creationMessage', data.message, true);
-                document.getElementById('teacherPassword').value = '';
-                document.getElementById('teacherName').value = '';
-            } else {
-                showMessage('creationMessage', data.message, false);
-            }
         }
 
         async function createNewStudent() {
@@ -297,10 +284,10 @@
                 return;
             }
 
-            const res = await fetch('/api/create-student', {
+            const res = await fetch('/api/students', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, name, balance: parseInt(balance) })
+                body: JSON.stringify({ id, name, balance: parseInt(balance), classId })
             });
             const data = await res.json();
             
@@ -317,7 +304,7 @@
 
         async function loadStudents() {
             document.getElementById('loading').style.display = 'block';
-            const res = await fetch('/api/students');
+            const res = await fetch(`/api/students/${classId}`);
             const students = await res.json();
             const list = document.getElementById('studentsList');
             list.innerHTML = '';
@@ -333,7 +320,7 @@
                 div.className = 'student-row';
                 div.innerHTML = `
                     <div class="student-info">
-                        ${s.name} (קוד: ${s.id})
+                        ${s.name} | סיסמה: <strong>${s.id}</strong>
                     </div>
                     <div class="balance-display">
                         יתרה: <span id="bal-${s.id}">${s.balance}</span>
@@ -350,10 +337,10 @@
         }
 
         async function updateBalance(id, amount) {
-            const res = await fetch('/api/update', {
+            const res = await fetch('/api/update-balance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studentId: id, amount })
+                body: JSON.stringify({ studentId: id, classId, amount })
             });
             const data = await res.json();
             
@@ -387,7 +374,7 @@
             const res = await fetch('/api/set-balance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studentId: currentEditStudentId, balance: parseInt(newBalance) })
+                body: JSON.stringify({ studentId: currentEditStudentId, classId, balance: parseInt(newBalance) })
             });
             const data = await res.json();
             
@@ -404,7 +391,7 @@
                 return;
             }
 
-            const res = await fetch(`/api/students/${id}`, {
+            const res = await fetch(`/api/students/${classId}/${id}`, {
                 method: 'DELETE'
             });
             const data = await res.json();
@@ -422,7 +409,7 @@
                 return;
             }
 
-            const res = await fetch('/api/purchases', {
+            const res = await fetch(`/api/purchases/${classId}/all`, {
                 method: 'DELETE'
             });
             const data = await res.json();
