@@ -312,7 +312,12 @@
     </div>
 
     <script>
-        if (!localStorage.getItem('adminAuth')) {
+        const classId = localStorage.getItem('classId');
+        const className = localStorage.getItem('className');
+        const isSuperadmin = localStorage.getItem('superadminMode') === 'true';
+        const isTeacher = localStorage.getItem('teacherAuth') === 'true';
+
+        if (!classId || (!isSuperadmin && !isTeacher)) {
             window.location.href = 'index.html';
         }
 
@@ -404,7 +409,8 @@
                     price, 
                     stock: parseInt(stock) || 0,
                     description,
-                    image: imageBase64
+                    image: imageBase64,
+                    classId
                 })
             });
             const data = await res.json();
@@ -423,7 +429,7 @@
         }
 
         async function loadProducts() {
-            const res = await fetch('/api/products');
+            const res = await fetch(`/api/products/${classId}`);
             const products = await res.json();
             const list = document.getElementById('productsList');
 
@@ -522,7 +528,7 @@
         }
 
         async function loadPendingPurchases() {
-            const res = await fetch('/api/purchases');
+            const res = await fetch(`/api/purchases/${classId}`);
             const purchases = await res.json();
             const pending = purchases.filter(p => p.status === 'pending');
             
@@ -545,7 +551,7 @@
             list.innerHTML = '';
             for (const p of pending) {
                 // בדיקת מלאי עבור כל קניה
-                const productRes = await fetch('/api/products');
+                const productRes = await fetch(`/api/products/${classId}`);
                 const products = await productRes.json();
                 const product = products.find(prod => prod._id === p.productId);
                 
@@ -594,7 +600,7 @@
         }
 
         async function loadPurchaseHistory() {
-            const res = await fetch('/api/purchases');
+            const res = await fetch(`/api/purchases/${classId}`);
             const purchases = await res.json();
             const list = document.getElementById('historyList');
 
