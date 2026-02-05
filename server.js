@@ -359,13 +359,27 @@ app.delete('/api/students/:classId/:studentId', async (req, res) => {
 
 // יצירת מוצר
 app.post('/api/products', async (req, res) => {
+    console.log('=== 🛒 בקשה להוספת מוצר חדש ===');
+    console.log('📦 Body שהתקבל:', JSON.stringify(req.body, null, 2));
+    
     try {
         const { name, price, description, image, stock, classId } = req.body;
         
+        console.log('🔍 בדיקת פרמטרים:');
+        console.log('  - name:', name);
+        console.log('  - price:', price);
+        console.log('  - stock:', stock);
+        console.log('  - classId:', classId);
+        console.log('  - description:', description);
+        console.log('  - image:', image ? `יש תמונה (${image.length} תווים)` : 'אין תמונה');
+        
         if (!name || !price || !classId) {
+            console.log('❌ שדות חובה חסרים!');
             return res.json({ success: false, message: "שם, מחיר ומזהה כיתה הן שדות חובה" });
         }
 
+        console.log('✅ כל השדות החובה קיימים');
+        
         const newProduct = new Product({
             name,
             price: parseInt(price),
@@ -375,12 +389,19 @@ app.post('/api/products', async (req, res) => {
             classId
         });
 
-        await newProduct.save();
-        res.json({ success: true, message: `המוצר ${name} נוסף בהצלחה`, product: newProduct });
+        console.log('💾 מנסה לשמור את המוצר במסד הנתונים...');
+        const savedProduct = await newProduct.save();
+        console.log('✅ המוצר נשמר בהצלחה!');
+        console.log('📄 מוצר שנוצר:', JSON.stringify(savedProduct, null, 2));
+        
+        res.json({ success: true, message: `המוצר ${name} נוסף בהצלחה`, product: savedProduct });
+        console.log('🎉 תגובה נשלחה ללקוח בהצלחה');
     } catch (error) {
-        console.error("Create product error:", error);
+        console.error("❌❌❌ Create product error:", error);
+        console.error('Stack trace:', error.stack);
         res.json({ success: false, message: "שגיאה ביצירת מוצר" });
     }
+    console.log('=== סיום טיפול בבקשה ===\n');
 });
 
 // קבלת מוצרים של כיתה
