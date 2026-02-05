@@ -406,14 +406,40 @@ app.post('/api/products', async (req, res) => {
 
 // קבלת מוצרים של כיתה
 app.get('/api/products/:classId', async (req, res) => {
+    console.log('=== 🔍 בקשה לקבלת מוצרים ===');
+    console.log('📍 classId מה-URL:', req.params.classId);
+    console.log('🔤 סוג classId:', typeof req.params.classId);
+    
     try {
         const products = await Product.find({ classId: req.params.classId })
             .sort({ createdAt: -1 });
+        
+        console.log('📦 מוצרים שנמצאו:', products.length);
+        
+        if (products.length > 0) {
+            console.log('✅ דוגמה למוצר ראשון:', {
+                id: products[0]._id,
+                name: products[0].name,
+                classId: products[0].classId,
+                classIdType: typeof products[0].classId
+            });
+        } else {
+            console.log('⚠️ לא נמצאו מוצרים! בודק כמה מוצרים יש בכלל...');
+            const allProducts = await Product.find({});
+            console.log('📊 סך הכל מוצרים במסד:', allProducts.length);
+            if (allProducts.length > 0) {
+                console.log('🔎 classId של מוצר ראשון במסד:', allProducts[0].classId);
+                console.log('🔎 classId שחיפשנו:', req.params.classId);
+                console.log('❓ האם שווים?', String(allProducts[0].classId) === String(req.params.classId));
+            }
+        }
+        
         res.json(products);
     } catch (error) {
-        console.error("Get products error:", error);
+        console.error("❌ Get products error:", error);
         res.json([]);
     }
+    console.log('=== סיום קבלת מוצרים ===\n');
 });
 
 // מחיקת מוצר
