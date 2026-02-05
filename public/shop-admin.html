@@ -372,14 +372,19 @@
         }
 
         async function addProduct() {
-            const name = document.getElementById('productName').value;
+            const name = document.getElementById('productName').value.trim();
             const price = document.getElementById('productPrice').value;
             const stock = document.getElementById('productStock').value;
-            const description = document.getElementById('productDescription').value;
+            const description = document.getElementById('productDescription').value.trim();
             const imageFile = document.getElementById('productImage').files[0];
 
             if (!name || !price) {
                 showMessage('productMessage', 'נא למלא שם ומחיר', false);
+                return;
+            }
+
+            if (price <= 0) {
+                showMessage('productMessage', 'המחיר חייב להיות גדול מ-0', false);
                 return;
             }
 
@@ -401,43 +406,63 @@
                 }
             }
 
-            const res = await fetch('/api/products', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    name, 
-                    price, 
-                    stock: parseInt(stock) || 0,
-                    description,
-                    image: imageBase64,
-                    classId
-                })
-            });
-            const data = await res.json();
+            try {
+                const res = await fetch('/api/products', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        name, 
+                        price: parseInt(price),
+                        stock: parseInt(stock) || 0,
+                        description,
+                        image: imageBase64,
+                        classId
+                    })
+                });
+                
+                if (!res.ok) {
+                    throw new Error('שגיאת רשת');
+                }
+                
+                const data = await res.json();
 
-            if (data.success) {
-                showMessage('productMessage', data.message, true);
-                document.getElementById('productName').value = '';
-                document.getElementById('productPrice').value = '';
-                document.getElementById('productStock').value = '0';
-                document.getElementById('productDescription').value = '';
-                clearImage();
-                loadProducts();
-            } else {
-                showMessage('productMessage', data.message, false);
+                if (data.success) {
+                    showMessage('productMessage', data.message, true);
+                    document.getElementById('productName').value = '';
+                    document.getElementById('productPrice').value = '';
+                    document.getElementById('productStock').value = '0';
+                    document.getElementById('productDescription').value = '';
+                    clearImage();
+                    loadProducts();
+                } else {
+                    showMessage('productMessage', data.message || 'שגיאה בהוספת המוצר', false);
+                }
+            } catch (error) {
+                console.error('שגיאה בהוספת מוצר:', error);
+                showMessage('productMessage', 'שגיאה בחיבור לשרת', false);
             }
         }
 
         async function loadProducts() {
+            console.log('🔄 טוען מוצרים...');
+            console.log('📍 classId:', classId);
+            
             const res = await fetch(`/api/products/${classId}`);
+            console.log('📡 תגובת שרת - סטטוס:', res.status);
+            
             const products = await res.json();
+            console.log('📦 מוצרים שהתקבלו:', products);
+            console.log('🔢 מספר מוצרים:', products.length);
+            
             const list = document.getElementById('productsList');
 
             if (products.length === 0) {
+                console.log('⚠️ אין מוצרים להצגה');
                 list.innerHTML = '<p style="text-align: center; color: #6c757d;">אין עדיין מוצרים בחנות</p>';
                 return;
             }
 
+            console.log('✅ מציג', products.length, 'מוצרים');
             list.innerHTML = '';
             products.forEach(p => {
                 const div = document.createElement('div');
