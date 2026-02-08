@@ -73,6 +73,32 @@ const purchaseSchema = new mongoose.Schema({
 
 const Purchase = mongoose.model('Purchase', purchaseSchema);
 
+// --- הגדרת המבנה של פרס כיתתי ---
+const classRewardSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    description: String,
+    targetAmount: { type: Number, required: true },
+    currentAmount: { type: Number, default: 0 },
+    classId: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
+    createdAt: { type: Date, default: Date.now },
+    completed: { type: Boolean, default: false },
+    completedAt: Date
+});
+
+const ClassReward = mongoose.model('ClassReward', classRewardSchema);
+
+// --- הגדרת המבנה של תרומה לפרס ---
+const rewardContributionSchema = new mongoose.Schema({
+    rewardId: { type: mongoose.Schema.Types.ObjectId, ref: 'ClassReward', required: true },
+    studentId: { type: String, required: true },
+    studentName: { type: String, required: true },
+    amount: { type: Number, required: true },
+    classId: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
+    createdAt: { type: Date, default: Date.now }
+});
+
+const RewardContribution = mongoose.model('RewardContribution', rewardContributionSchema);
+
 // מנהלי-על
 const SUPER_ADMINS = {
     'prha12345': { name: 'יאיר פריש', role: 'superadmin' },
@@ -601,6 +627,167 @@ app.delete('/api/purchases/:classId/all', async (req, res) => {
     } catch (error) {
         console.error("Delete all purchases error:", error);
         res.json({ success: false, message: "שגיאה במחיקת ההיסטוריה" });
+    }
+});
+
+// --- API לפרסים כיתתיים ---
+
+// קבלת כל הפרסים של כיתה
+app.get('/api/rewards/:classId', async (req, res) => {
+    try {
+        const rewards = await ClassReward.find({ classId: req.params.classId })
+            .sort({ completed: 1, createdAt: -1 });
+        res.json(rewards);
+    } catch (error) {
+        console.error("Get rewards error:", error);
+        res.json([]);
+    }
+});
+
+// יצירת פרס חדש
+app.post('/api/rewards', async (req, res) => {
+    try {
+        const { name, description, targetAmount, classId } = req.body;
+        
+        if (!name || !targetAmount || !classId) {
+            return res.json({ success: false, message: 'נא למלא את כל השדות החובה' });
+        }
+        
+        const newReward = new ClassReward({
+            name,
+            description: description || '',
+            targetAmount: parseInt(targetAmount),
+            classId
+        });
+        
+        await newReward.save();
+        res.json({ success: true, message: 'הפרס נוצר בהצלחה', reward: newReward });
+    } catch (error) {
+        console.error("Create reward error:", error);
+        res.json({ success: false, message: 'שגיאה ביצירת הפרס' });
+    }
+});
+
+// מחיקת פרס
+app.delete('/api/rewards/:id', async (req, res) => {
+    try {
+        await RewardContribution.deleteMany({ rewardId: req.params.id });
+        await ClassReward.findByIdAndDelete(req.params.id);
+        res.json({ success: true, message: 'הפרס נמחק בהצלחה' });
+    } catch (error) {
+        console.error("Delete reward error:", error);
+        res.json({ success: false, message: 'שגיאה במחיקת הפרס' });
+    }
+});
+
+// תרומה לפרס
+app.post('/api/rewards/:id/contribute', async (req, res) => {
+    try {
+        const { studentId, amount, classId } = req.body;
+        
+        if (!studentId || !amount || !classId) {
+            return res.json({ success: false, message: 'פרמטרים חסרים' });
+        }
+        
+        const student = await Student.findOne({ id: studentId, classId });
+        if (!student) {
+            return res.json({ success: false, message: 'תלמיד לא נמצא' });
+        }
+        
+        const reward = await ClassReward.findById(req.params.id);
+        if (!reward) {
+            return res.json({ success: false, message: 'פרס לא נמצא' });
+        }
+        
+        if (reward.completed) {
+            return res.json({ success: false, message: 'הפרס כבר הושג!' });
+        }
+        
+        const contributionAmount = parseInt(amount);
+        
+        if (student.balance < contributionAmount) {
+            return res.json({ success: false, message: 'אין מספיק נקודות לתרומה' });
+        }
+        
+        // הורדת נקודות מהתלמיד
+        student.balance -= contributionAmount;
+        await student.save();
+        
+        // הוספת התרומה
+        const contribution = new RewardContribution({
+            rewardId: reward._id,
+            studentId: student.id,
+            studentName: student.name,
+            amount: contributionAmount,
+            classId
+        });
+        await contribution.save();
+        
+        // עדכון הסכום הנוכחי של הפרס
+        reward.currentAmount += contributionAmount;
+        
+        // בדיקה אם הפרס הושג
+        if (reward.currentAmount >= reward.targetAmount) {
+            reward.completed = true;
+            reward.completedAt = new Date();
+        }
+        
+        await reward.save();
+        
+        res.json({ 
+            success: true, 
+            message: 'התרומה נוספה בהצלחה!',
+            newBalance: student.balance,
+            rewardCurrentAmount: reward.currentAmount,
+            rewardCompleted: reward.completed
+        });
+    } catch (error) {
+        console.error("Contribute to reward error:", error);
+        res.json({ success: false, message: 'שגיאה בתרומה לפרס' });
+    }
+});
+
+// קבלת פירוט תרומות לפרס (ללא זהות התורמים)
+app.get('/api/rewards/:id/stats', async (req, res) => {
+    try {
+        const contributions = await RewardContribution.find({ rewardId: req.params.id });
+        const totalContributions = contributions.length;
+        const totalAmount = contributions.reduce((sum, c) => sum + c.amount, 0);
+        
+        res.json({
+            totalContributions,
+            totalAmount
+        });
+    } catch (error) {
+        console.error("Get reward stats error:", error);
+        res.json({ totalContributions: 0, totalAmount: 0 });
+    }
+});
+
+// עדכון פרס (מורים בלבד)
+app.put('/api/rewards/:id', async (req, res) => {
+    try {
+        const { name, description, targetAmount } = req.body;
+        const updateData = {};
+        
+        if (name) updateData.name = name;
+        if (description !== undefined) updateData.description = description;
+        if (targetAmount) updateData.targetAmount = parseInt(targetAmount);
+        
+        const updatedReward = await ClassReward.findByIdAndUpdate(
+            req.params.id,
+            updateData,
+            { new: true }
+        );
+        
+        if (updatedReward) {
+            res.json({ success: true, reward: updatedReward });
+        } else {
+            res.json({ success: false, message: 'פרס לא נמצא' });
+        }
+    } catch (error) {
+        console.error("Update reward error:", error);
+        res.json({ success: false, message: 'שגיאה בעדכון הפרס' });
     }
 });
 
