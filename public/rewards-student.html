@@ -5,33 +5,50 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>פרסים כיתתיים</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body { 
             font-family: 'Segoe UI', sans-serif; 
-            padding: 20px; 
+            padding: 10px; 
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #333;
             min-height: 100vh;
+            margin: 0;
         }
         .container {
             max-width: 900px;
             margin: 0 auto;
+            width: 100%;
         }
         .header { 
             background: white;
-            padding: 20px;
+            padding: 15px;
             border-radius: 12px;
             margin-bottom: 20px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         .header h2 { 
             color: #667eea; 
             margin: 0;
+            font-size: 1.5em;
+        }
+        .header-left {
+            flex: 1;
+            min-width: 200px;
         }
         .student-info {
             text-align: left;
+            flex: 1;
+            min-width: 200px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
         }
         .balance-badge {
             background: linear-gradient(135deg, #667eea, #764ba2);
@@ -41,6 +58,8 @@
             font-weight: bold;
             display: inline-block;
             margin-bottom: 5px;
+            font-size: 0.95em;
+            white-space: nowrap;
         }
         
         .reward-card {
@@ -67,9 +86,10 @@
             margin-bottom: 15px;
         }
         .reward-title {
-            font-size: 1.5em;
+            font-size: 1.3em;
             font-weight: bold;
             color: #333;
+            word-wrap: break-word;
         }
         .reward-description {
             color: #666;
@@ -125,9 +145,13 @@
             font-size: 1em;
             display: flex;
             justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         .stat-item {
             text-align: center;
+            flex: 1;
+            min-width: 80px;
         }
         .stat-label {
             font-size: 0.85em;
@@ -154,9 +178,11 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            flex-wrap: wrap;
         }
         .amount-input {
             flex: 1;
+            min-width: 120px;
             padding: 12px;
             border: 2px solid #ddd;
             border-radius: 8px;
@@ -171,12 +197,13 @@
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             border: none;
-            padding: 12px 25px;
+            padding: 12px 20px;
             border-radius: 8px;
             cursor: pointer;
             font-weight: bold;
-            font-size: 1.05em;
+            font-size: 1em;
             transition: transform 0.2s, box-shadow 0.2s;
+            white-space: nowrap;
         }
         .btn-contribute:hover {
             transform: translateY(-2px);
@@ -189,10 +216,12 @@
             display: flex;
             gap: 8px;
             margin-top: 10px;
+            flex-wrap: wrap;
         }
         .quick-amount-btn {
             flex: 1;
-            padding: 8px;
+            min-width: 60px;
+            padding: 10px;
             border: 2px solid #667eea;
             background: white;
             color: #667eea;
@@ -207,15 +236,18 @@
         }
         .header-buttons {
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
         .header-buttons button {
-            padding: 10px 20px;
+            padding: 8px 15px;
             border-radius: 8px;
             border: none;
             cursor: pointer;
             font-weight: bold;
             transition: transform 0.2s;
+            font-size: 0.9em;
         }
         .header-buttons button:hover {
             transform: translateY(-2px);
@@ -234,12 +266,114 @@
         }
         .empty-state {
             text-align: center;
-            padding: 60px 20px;
+            padding: 40px 20px;
             color: #666;
         }
         .empty-state-icon {
-            font-size: 4em;
+            font-size: 3em;
             margin-bottom: 20px;
+        }
+        
+        /* Media Queries למובייל */
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+            }
+            .header {
+                padding: 10px;
+            }
+            .header h2 {
+                font-size: 1.2em;
+            }
+            .header-left,
+            .student-info {
+                width: 100%;
+                text-align: center;
+            }
+            .student-info {
+                align-items: center;
+            }
+            .header-buttons {
+                width: 100%;
+                justify-content: center;
+            }
+            .header-buttons button {
+                flex: 1;
+                min-width: 70px;
+            }
+            .reward-card {
+                padding: 15px;
+            }
+            .reward-title {
+                font-size: 1.2em;
+            }
+            .reward-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .completed-badge {
+                padding: 6px 15px;
+                font-size: 0.85em;
+            }
+            .progress-bar {
+                font-size: 0.9em;
+            }
+            .progress-text {
+                font-size: 0.9em;
+            }
+            .stats {
+                padding: 10px;
+            }
+            .stat-value {
+                font-size: 1.1em;
+            }
+            .contribute-controls {
+                flex-direction: column;
+            }
+            .amount-input,
+            .btn-contribute {
+                width: 100%;
+            }
+            .quick-amounts {
+                gap: 5px;
+            }
+            .quick-amount-btn {
+                padding: 8px;
+                font-size: 0.9em;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .header h2 {
+                font-size: 1.1em;
+            }
+            .balance-badge {
+                font-size: 0.85em;
+                padding: 6px 12px;
+            }
+            .header-buttons button {
+                padding: 6px 10px;
+                font-size: 0.85em;
+            }
+            .reward-title {
+                font-size: 1.1em;
+            }
+            .reward-description {
+                font-size: 0.95em;
+            }
+            .progress-bar-bg {
+                height: 30px;
+            }
+            .stat-item {
+                min-width: 70px;
+            }
+            .stat-label {
+                font-size: 0.75em;
+            }
+            .stat-value {
+                font-size: 1em;
+            }
         }
         #message {
             margin: 20px 0;
@@ -263,15 +397,15 @@
 <body>
     <div class="container">
         <div class="header">
-            <div>
+            <div class="header-left">
                 <h2>🏆 פרסים כיתתיים</h2>
-                <div style="color: #666; margin-top: 5px;">
+                <div style="color: #666; margin-top: 5px; font-size: 0.9em;">
                     <span id="studentName"></span> | <span id="className"></span>
                 </div>
             </div>
             <div class="student-info">
                 <div class="balance-badge">
-                    💰 יתרה: <span id="balance">---</span> נקודות
+                    💰 <span id="balance">---</span> נקודות
                 </div>
                 <div class="header-buttons">
                     <button class="btn-wallet" onclick="window.location.href='student.html'">ארנק</button>
