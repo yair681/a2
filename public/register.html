@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>הרשמה לכיתה</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background-color: #f0f2f5;
+            padding: 20px;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-width: 420px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin: 0 0 5px 0;
+            font-size: 1.6em;
+        }
+        .class-name {
+            text-align: center;
+            color: #007bff;
+            font-weight: bold;
+            font-size: 1.15em;
+            margin-bottom: 5px;
+        }
+        .teacher-name {
+            text-align: center;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .remaining {
+            text-align: center;
+            background-color: #e7f3ff;
+            color: #0056b3;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #444;
+        }
+        .hint {
+            font-size: 0.85em;
+            color: #777;
+            font-weight: normal;
+            margin-bottom: 6px;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 18px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 13px;
+            border-radius: 8px;
+            border: none;
+            background-color: #28a745;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover { background-color: #218838; }
+        button:disabled { background-color: #9bb; cursor: not-allowed; }
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .msg-error { background-color: #f8d7da; color: #721c24; }
+        .state-box { text-align: center; }
+        .state-icon { font-size: 3em; margin-bottom: 10px; }
+        .code-display {
+            background-color: #f4f6f9;
+            border: 2px dashed #28a745;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 1.8em;
+            font-weight: bold;
+            letter-spacing: 2px;
+            direction: ltr;
+        }
+        .login-link {
+            display: inline-block;
+            margin-top: 10px;
+            color: #007bff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div id="loading" class="state-box">טוען...</div>
+
+        <!-- קישור לא תקין / מלא -->
+        <div id="invalidState" class="state-box" style="display: none;">
+            <div class="state-icon">🔒</div>
+            <h1>הקישור לא זמין</h1>
+            <p id="invalidMessage" style="color: #666;"></p>
+        </div>
+
+        <!-- טופס ההרשמה -->
+        <div id="formState" style="display: none;">
+            <h1>הרשמה לכיתה 🎓</h1>
+            <div class="class-name" id="className"></div>
+            <div class="teacher-name" id="teacherName"></div>
+            <div class="remaining" id="remaining"></div>
+
+            <div id="message"></div>
+
+            <label for="fullName">השם המלא שלך</label>
+            <input type="text" id="fullName" placeholder="לדוגמה: דני כהן" maxlength="60" autocomplete="name">
+
+            <label for="code">בחר לעצמך קוד אישי</label>
+            <div class="hint">זה יהיה הקוד שאיתו תתחבר למערכת. תזכור אותו!</div>
+            <input type="text" id="code" placeholder="לפחות 3 תווים" maxlength="40" autocomplete="off">
+
+            <button id="submitBtn" onclick="register()">הירשם לכיתה</button>
+        </div>
+
+        <!-- הצלחה -->
+        <div id="successState" class="state-box" style="display: none;">
+            <div class="state-icon">🎉</div>
+            <h1>נרשמת בהצלחה!</h1>
+            <p style="color: #666;">הקוד האישי שלך להתחברות:</p>
+            <div class="code-display" id="finalCode"></div>
+            <p style="color: #666; font-size: 0.9em;">שמור אותו במקום בטוח.</p>
+            <a class="login-link" href="/">להתחברות למערכת ←</a>
+        </div>
+    </div>
+
+    <script src="common.js"></script>
+    <script>
+        const token = new URLSearchParams(window.location.search).get('t');
+
+        function show(stateId) {
+            ['loading', 'invalidState', 'formState', 'successState'].forEach(id => {
+                document.getElementById(id).style.display = 'none';
+            });
+            document.getElementById(stateId).style.display = 'block';
+        }
+
+        function showInvalid(message) {
+            document.getElementById('invalidMessage').textContent = message;
+            show('invalidState');
+        }
+
+        function showMessage(message) {
+            const el = document.getElementById('message');
+            el.textContent = message;
+            el.className = 'message msg-error';
+            setTimeout(() => { el.textContent = ''; el.className = ''; }, 5000);
+        }
+
+        async function register() {
+            const name = document.getElementById('fullName').value.trim();
+            const code = document.getElementById('code').value.trim();
+            const btn = document.getElementById('submitBtn');
+
+            if (!name || !code) {
+                showMessage('נא למלא שם מלא וקוד אישי');
+                return;
+            }
+
+            if (code.length < 3) {
+                showMessage('הקוד חייב להיות באורך 3 תווים לפחות');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'רושם...';
+
+            try {
+                const res = await fetch(`/api/register/${encodeURIComponent(token)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, code })
+                });
+
+                if (res.status === 429) {
+                    showMessage('יותר מדי בקשות. נסה שוב בעוד כמה דקות.');
+                    return;
+                }
+
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('finalCode').textContent = data.code;
+                    show('successState');
+                } else {
+                    showMessage(data.message);
+                }
+            } catch (error) {
+                showMessage('שגיאה בחיבור לשרת. נסה שוב.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'הירשם לכיתה';
+            }
+        }
+
+        (async function init() {
+            if (!token) {
+                showInvalid('הקישור לא תקין.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/register/${encodeURIComponent(token)}`);
+                const data = await res.json();
+
+                if (!data.valid) {
+                    showInvalid(data.message);
+                    return;
+                }
+
+                document.getElementById('className').textContent = data.className;
+                document.getElementById('teacherName').textContent = `מורה: ${data.teacherName}`;
+                document.getElementById('remaining').textContent =
+                    data.remaining === 1 ? 'נשאר מקום אחד אחרון' : `נשארו ${data.remaining} מקומות`;
+                show('formState');
+
+                document.getElementById('code').addEventListener('keypress', e => {
+                    if (e.key === 'Enter') register();
+                });
+            } catch (error) {
+                showInvalid('שגיאה בטעינת הקישור. נסה לרענן.');
+            }
+        })();
+    </script>
+</body>
+</html>

@@ -221,8 +221,90 @@ async function waitForServer(timeoutMs = 30000) {
         check('הנקודות ירדו פעם אחת בלבד', finalBalance.data.balance === 30,
             `balance=${finalBalance.data.balance}`);
 
-        // ============ 7. יציאה ============
-        console.log('\n7. יציאה');
+        // ============ 7. קישורי הרשמה ============
+        console.log('\n7. קישורי הרשמה');
+
+        check('אנונימי לא יכול ליצור קישור',
+            (await anon('POST', '/api/registration-links', { maxRegistrations: 5, classId: classAId })).status === 401);
+        check('אנונימי לא רואה את רשימת הקישורים',
+            (await anon('GET', `/api/registration-links/${classAId}`)).status === 401);
+        check('תלמיד לא יכול ליצור קישור',
+            (await student('POST', '/api/registration-links', { maxRegistrations: 5, classId: classAId })).status === 403);
+        check('מורה א לא יכול ליצור קישור לכיתה ב',
+            (await teacherA('POST', '/api/registration-links', { maxRegistrations: 5, classId: classBId })).status === 403);
+
+        check('מכסה לא חוקית נדחית',
+            (await teacherA('POST', '/api/registration-links', { maxRegistrations: 0, classId: classAId })).data.success === false);
+
+        const linkRes = await teacherA('POST', '/api/registration-links', { maxRegistrations: 2, classId: classAId });
+        check('מורה יוצר קישור עם מכסה 2', linkRes.data.success === true);
+
+        const token = linkRes.data.link.token;
+        const linkId = linkRes.data.link._id;
+
+        const info = await anon('GET', `/api/register/${token}`);
+        check('הקישור תקף ומחזיר את שם הכיתה', info.data.valid === true && info.data.className === 'כיתה א');
+        check('הקישור מדווח על 2 מקומות פנויים', info.data.remaining === 2);
+        check('הקישור לא חושף את סיסמת המורה',
+            JSON.stringify(info.data).includes('assword') === false);
+
+        check('טוקן מומצא נדחה',
+            (await anon('GET', '/api/register/deadbeefdeadbeefdeadbeefdeadbeef')).data.valid === false);
+
+        const reg1 = await anon('POST', `/api/register/${token}`, { name: 'תלמיד ראשון', code: '77701' });
+        check('הרשמה ראשונה מצליחה', reg1.data.success === true && reg1.data.code === '77701');
+
+        check('קוד תפוס נדחה',
+            (await anon('POST', `/api/register/${token}`, { name: 'מישהו', code: '10401' })).data.success === false);
+        check('קוד קצר מדי נדחה',
+            (await anon('POST', `/api/register/${token}`, { name: 'מישהו', code: 'ab' })).data.success === false);
+        check('שם ריק נדחה',
+            (await anon('POST', `/api/register/${token}`, { name: '', code: '77709' })).data.success === false);
+
+        const reg2 = await anon('POST', `/api/register/${token}`, { name: 'תלמיד שני', code: '77702' });
+        check('הרשמה שנייה מצליחה', reg2.data.success === true);
+
+        const reg3 = await anon('POST', `/api/register/${token}`, { name: 'תלמיד שלישי', code: '77703' });
+        check('הרשמה שלישית נחסמת — המכסה מלאה', reg3.data.success === false);
+
+        check('הקישור המלא מדווח שהוא נעול',
+            (await anon('GET', `/api/register/${token}`)).data.valid === false);
+
+        const afterReg = await teacherA('GET', `/api/students/${classAId}`);
+        check('שני התלמידים נוספו לכיתה של המורה', afterReg.data.length === 3,
+            `count=${afterReg.data.length}`);
+
+        const links = await teacherA('GET', `/api/registration-links/${classAId}`);
+        check('הקישור מסומן כמלא עם התראה פתוחה',
+            links.data[0].usedCount === 2 && !!links.data[0].limitReachedAt && links.data[0].notificationDismissed === false);
+
+        await teacherA('POST', `/api/registration-links/${linkId}/dismiss`);
+        const afterDismiss = await teacherA('GET', `/api/registration-links/${classAId}`);
+        check('סגירת ההתראה נשמרת', afterDismiss.data[0].notificationDismissed === true);
+
+        // תלמיד שנרשם לבד יכול להתחבר
+        const selfStudent = makeClient();
+        const selfLogin = await selfStudent('POST', '/api/login', { code: '77701' });
+        check('תלמיד שנרשם דרך הקישור מתחבר', selfLogin.data.success === true && selfLogin.data.role === 'student');
+        check('הוא שויך לכיתה הנכונה', selfLogin.data.className === 'כיתה א');
+
+        // מחיקת קישור
+        check('מורה ב לא יכול למחוק קישור של כיתה א',
+            (await (async () => {
+                const teacherB = makeClient();
+                await teacherB('POST', '/api/login', { code: 'teacher-b-pass' });
+                return teacherB('DELETE', `/api/registration-links/${linkId}`);
+            })()).status === 403);
+
+        check('מורה א מוחק את הקישור שלו',
+            (await teacherA('DELETE', `/api/registration-links/${linkId}`)).data.success === true);
+        check('אחרי מחיקה הקישור לא עובד',
+            (await anon('GET', `/api/register/${token}`)).data.valid === false);
+        check('אחרי מחיקה אי אפשר להירשם דרכו',
+            (await anon('POST', `/api/register/${token}`, { name: 'מאוחר', code: '77708' })).data.success === false);
+
+        // ============ 8. יציאה ============
+        console.log('\n8. יציאה');
         await student('POST', '/api/logout');
         check('אחרי יציאה הסשן נסגר', (await student('GET', '/api/my-balance')).status === 401);
 

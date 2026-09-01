@@ -176,6 +176,71 @@
             display: flex;
             gap: 10px;
         }
+
+        /* קישורי הרשמה */
+        .link-row {
+            border-bottom: 1px solid #eee;
+            padding: 14px 0;
+        }
+        .link-row:last-child { border-bottom: none; }
+        .link-url {
+            font-family: monospace;
+            font-size: 0.85em;
+            background-color: #f4f6f9;
+            padding: 8px;
+            border-radius: 6px;
+            direction: ltr;
+            text-align: left;
+            word-break: break-all;
+            margin-bottom: 8px;
+        }
+        .link-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .link-count {
+            font-weight: bold;
+            color: #007bff;
+        }
+        .link-count.full { color: #dc3545; }
+        .link-actions { display: flex; gap: 5px; }
+        .link-actions button {
+            padding: 6px 10px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            color: white;
+            font-size: 0.85em;
+        }
+        .btn-copy { background-color: #17a2b8; }
+        .btn-remove { background-color: #dc3545; }
+
+        /* התראות */
+        .notice {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+        .notice button {
+            background-color: #856404;
+            color: white;
+            border: none;
+            padding: 7px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            white-space: nowrap;
+        }
         .header-buttons button {
             padding: 8px 15px;
             border-radius: 6px;
@@ -200,6 +265,8 @@
         </div>
     </div>
 
+    <div id="notices"></div>
+
     <div class="content-grid">
         <div class="card">
             <h3>⚡ הוספת תלמיד חדש</h3>
@@ -211,6 +278,16 @@
             
             <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
             
+            <h3>🔗 קישור הרשמה</h3>
+            <p style="font-size: 0.85em; color: #666; margin-top: 0;">
+                צור קישור ושלח לתלמידים. הם ימלאו שם וקוד אישי ויצטרפו לכיתה לבד.
+            </p>
+            <input type="number" id="linkLimit" placeholder="כמה תלמידים יוכלו להירשם? (למשל 26)" min="1" max="200">
+            <button class="btn-primary" onclick="createLink()">צור קישור</button>
+            <div id="linkMessage"></div>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+
             <h3>🗑️ מחיקת נתונים</h3>
             <button class="btn-danger" onclick="deleteAllHistory()">מחק את כל ההיסטוריה</button>
             <p style="font-size: 0.85em; color: #666; margin-top: 10px;">פעולה זו תמחק את כל רשומות הקניות מהמערכת</p>
@@ -220,6 +297,11 @@
             <h3>רשימת תלמידים ויתרה</h3>
             <div id="studentsList"></div>
             <div id="loading" style="text-align: center;">טוען נתונים...</div>
+
+            <hr style="margin: 25px 0; border: none; border-top: 1px solid #ddd;">
+
+            <h3>קישורי הרשמה פעילים</h3>
+            <div id="linksList"></div>
         </div>
     </div>
 
@@ -401,6 +483,115 @@
             }
         }
 
+        // --- קישורי הרשמה ---
+
+        function linkUrl(token) {
+            return `${window.location.origin}/register.html?t=${token}`;
+        }
+
+        async function createLink() {
+            const maxRegistrations = parseInt(document.getElementById('linkLimit').value, 10);
+
+            if (!Number.isFinite(maxRegistrations) || maxRegistrations < 1 || maxRegistrations > 200) {
+                showMessage('linkMessage', 'נא להזין מספר בין 1 ל-200.', false);
+                return;
+            }
+
+            const data = await apiPost('/api/registration-links', { maxRegistrations, classId });
+
+            if (data.success) {
+                showMessage('linkMessage', data.message, true);
+                document.getElementById('linkLimit').value = '';
+                loadLinks();
+            } else {
+                showMessage('linkMessage', data.message, false);
+            }
+        }
+
+        async function copyLink(token, button) {
+            try {
+                await navigator.clipboard.writeText(linkUrl(token));
+                const original = button.textContent;
+                button.textContent = '✓ הועתק';
+                setTimeout(() => { button.textContent = original; }, 2000);
+            } catch (error) {
+                alert('לא הצלחתי להעתיק. הקישור: ' + linkUrl(token));
+            }
+        }
+
+        async function deleteLink(id) {
+            if (!confirm('למחוק את הקישור?\n\nמרגע זה אף אחד לא יוכל להירשם דרכו. תלמידים שכבר נרשמו יישארו בכיתה.')) {
+                return;
+            }
+
+            const data = await apiJson(`/api/registration-links/${id}`, { method: 'DELETE' });
+
+            if (data.success) {
+                loadLinks();
+            } else {
+                alert('שגיאה: ' + data.message);
+            }
+        }
+
+        async function dismissNotice(id) {
+            await apiPost(`/api/registration-links/${id}/dismiss`);
+            loadLinks();
+        }
+
+        async function loadLinks() {
+            const links = await apiJson(`/api/registration-links/${classId}`);
+            const list = document.getElementById('linksList');
+            const notices = document.getElementById('notices');
+
+            // התראות על קישורים שהתמלאו ועוד לא נסגרו
+            notices.innerHTML = '';
+            links.filter(l => l.usedCount >= l.maxRegistrations && !l.notificationDismissed)
+                .forEach(l => {
+                    const div = document.createElement('div');
+                    div.className = 'notice';
+                    div.innerHTML = `
+                        <div>
+                            🔔 <strong>קישור הרשמה התמלא.</strong>
+                            ${esc(l.maxRegistrations)} תלמידים נרשמו, והקישור ננעל אוטומטית.
+                        </div>
+                        <button>סגור התראה</button>
+                    `;
+                    div.querySelector('button').onclick = () => dismissNotice(l._id);
+                    notices.appendChild(div);
+                });
+
+            if (links.length === 0) {
+                list.innerHTML = '<p style="text-align: center; color: #6c757d;">אין קישורי הרשמה. צור אחד מימין.</p>';
+                return;
+            }
+
+            list.innerHTML = '';
+            links.forEach(l => {
+                const isFull = l.usedCount >= l.maxRegistrations;
+
+                const div = document.createElement('div');
+                div.className = 'link-row';
+                div.innerHTML = `
+                    <div class="link-url">${esc(linkUrl(l.token))}</div>
+                    <div class="link-meta">
+                        <span class="link-count ${isFull ? 'full' : ''}">
+                            ${esc(l.usedCount)} / ${esc(l.maxRegistrations)} נרשמו${isFull ? ' — נעול' : ''}
+                        </span>
+                        <div class="link-actions">
+                            <button class="btn-copy">העתק</button>
+                            <button class="btn-remove">מחק</button>
+                        </div>
+                    </div>
+                `;
+
+                const [copyBtn, removeBtn] = div.querySelectorAll('.link-actions button');
+                copyBtn.onclick = () => copyLink(l.token, copyBtn);
+                removeBtn.onclick = () => deleteLink(l._id);
+
+                list.appendChild(div);
+            });
+        }
+
         (async function init() {
             const session = await loadSession(['teacher', 'superadmin']);
             if (!session) return;
@@ -419,6 +610,13 @@
             }
 
             loadStudents();
+            loadLinks();
+
+            // רענון כדי שהמורה יראה הרשמות חדשות והתראות בלי לרענן ידנית
+            setInterval(() => {
+                loadStudents();
+                loadLinks();
+            }, 30000);
         })();
     </script>
 </body>
