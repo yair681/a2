@@ -236,36 +236,17 @@
         </div>
     </div>
 
+    <script src="common.js"></script>
     <script>
-        // בקרת גישה
-        const classId = localStorage.getItem('classId');
-        const className = localStorage.getItem('className');
-        const isSuperadmin = localStorage.getItem('superadminMode') === 'true';
-        const isTeacher = localStorage.getItem('teacherAuth') === 'true';
-
-        if (!classId || (!isSuperadmin && !isTeacher)) {
-            window.location.href = 'index.html';
-        }
-
-        document.getElementById('className').textContent = className || '';
-        
-        // הצגת כפתור חזרה למנהלי-על בלבד
-        if (isSuperadmin) {
-            document.getElementById('backBtn').style.display = 'inline-block';
-        }
-
+        // classId משמש רק לבניית הכתובות. השרת מתעלם ממנו עבור מורה
+        // ולוקח את הכיתה מהטוקן, כך שמורה לא יכול לפנות לכיתה אחרת.
+        let classId = null;
         let currentEditStudentId = null;
 
         function backToSuperadmin() {
-            localStorage.removeItem('superadminMode');
-            localStorage.removeItem('classId');
-            localStorage.removeItem('className');
+            sessionStorage.removeItem('activeClassId');
+            sessionStorage.removeItem('activeClassName');
             window.location.href = 'superadmin.html';
-        }
-
-        function logout() {
-            localStorage.clear();
-            window.location.href = 'index.html';
         }
 
         function showMessage(elementId, message, isSuccess) {
@@ -285,13 +266,10 @@
                 return;
             }
 
-            const res = await fetch('/api/students', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, name, balance: parseInt(balance), classId })
+            const data = await apiPost('/api/students', {
+                id, name, balance: parseInt(balance, 10) || 0, classId
             });
-            const data = await res.json();
-            
+
             if (data.success) {
                 showMessage('creationMessage', data.message, true);
                 document.getElementById('newId').value = '';
@@ -305,8 +283,7 @@
 
         async function loadStudents() {
             document.getElementById('loading').style.display = 'block';
-            const res = await fetch(`/api/students/${classId}`);
-            const students = await res.json();
+            const students = await apiJson(`/api/students/${classId}`);
             const list = document.getElementById('studentsList');
             list.innerHTML = '';
             document.getElementById('loading').style.display = 'none';
@@ -321,39 +298,46 @@
                 div.className = 'student-row';
                 div.innerHTML = `
                     <div class="student-info">
-                        ${s.name} | סיסמה: <strong>${s.id}</strong>
+                        ${esc(s.name)} | סיסמה: <strong>${esc(s.id)}</strong>
                     </div>
                     <div class="balance-display">
-                        יתרה: <span id="bal-${s.id}">${s.balance}</span>
+                        יתרה: <span class="bal">${esc(s.balance)}</span>
                     </div>
                     <div class="actions">
-                        <button class="btn-plus" onclick="updateBalance('${s.id}', 5)">+5</button>
-                        <button class="btn-minus" onclick="updateBalance('${s.id}', -5)">-5</button>
-                        <button class="btn-edit" onclick="openEditModal('${s.id}', '${s.name}', ${s.balance})">✏️ ערוך</button>
-                        <button class="btn-delete" onclick="deleteStudent('${s.id}', '${s.name}')">🗑️ מחק</button>
+                        <button class="btn-plus">+5</button>
+                        <button class="btn-minus">-5</button>
+                        <button class="btn-edit">✏️ ערוך</button>
+                        <button class="btn-delete">🗑️ מחק</button>
                     </div>
                 `;
+
+                // מאזינים במקום onclick מוטמע — שם עם גרש היה שובר את הכפתורים
+                const balEl = div.querySelector('.bal');
+                const [plusBtn, minusBtn, editBtn, deleteBtn] = div.querySelectorAll('.actions button');
+                plusBtn.onclick = () => updateBalance(s.id, 5, balEl);
+                minusBtn.onclick = () => updateBalance(s.id, -5, balEl);
+                editBtn.onclick = () => openEditModal(s.id, s.name, s.balance, balEl);
+                deleteBtn.onclick = () => deleteStudent(s.id, s.name);
+
                 list.appendChild(div);
             });
         }
 
-        async function updateBalance(id, amount) {
-            const res = await fetch('/api/update-balance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studentId: id, classId, amount })
-            });
-            const data = await res.json();
-            
+        async function updateBalance(id, amount, balEl) {
+            const data = await apiPost('/api/update-balance', { studentId: id, classId, amount });
+
             if (data.success) {
-                document.getElementById(`bal-${id}`).innerText = data.newBalance;
+                balEl.innerText = data.newBalance;
             } else {
                 alert('שגיאה בעדכון היתרה: ' + data.message);
             }
         }
 
-        function openEditModal(id, name, balance) {
+        let currentEditBalanceEl = null;
+
+        function openEditModal(id, name, balance, balEl) {
             currentEditStudentId = id;
+            currentEditBalanceEl = balEl;
             document.getElementById('editStudentName').textContent = `תלמיד: ${name}`;
             document.getElementById('editBalance').value = balance;
             document.getElementById('editModal').style.display = 'block';
@@ -362,25 +346,24 @@
         function closeEditModal() {
             document.getElementById('editModal').style.display = 'none';
             currentEditStudentId = null;
+            currentEditBalanceEl = null;
         }
 
         async function saveBalance() {
-            const newBalance = document.getElementById('editBalance').value;
-            
-            if (!newBalance || newBalance < 0) {
+            // parseInt במקום בדיקת truthiness — קודם אי אפשר היה לאפס יתרה ל-0
+            const newBalance = parseInt(document.getElementById('editBalance').value, 10);
+
+            if (!Number.isFinite(newBalance) || newBalance < 0) {
                 alert('נא להזין יתרה חוקית');
                 return;
             }
 
-            const res = await fetch('/api/set-balance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studentId: currentEditStudentId, classId, balance: parseInt(newBalance) })
+            const data = await apiPost('/api/set-balance', {
+                studentId: currentEditStudentId, classId, balance: newBalance
             });
-            const data = await res.json();
-            
+
             if (data.success) {
-                document.getElementById(`bal-${currentEditStudentId}`).innerText = data.newBalance;
+                if (currentEditBalanceEl) currentEditBalanceEl.innerText = data.newBalance;
                 closeEditModal();
             } else {
                 alert('שגיאה בעדכון היתרה: ' + data.message);
@@ -392,10 +375,9 @@
                 return;
             }
 
-            const res = await fetch(`/api/students/${classId}/${id}`, {
+            const data = await apiJson(`/api/students/${classId}/${encodeURIComponent(id)}`, {
                 method: 'DELETE'
             });
-            const data = await res.json();
 
             if (data.success) {
                 alert(data.message);
@@ -410,10 +392,7 @@
                 return;
             }
 
-            const res = await fetch(`/api/purchases/${classId}/all`, {
-                method: 'DELETE'
-            });
-            const data = await res.json();
+            const data = await apiJson(`/api/purchases/${classId}/all`, { method: 'DELETE' });
 
             if (data.success) {
                 alert(data.message);
@@ -422,7 +401,25 @@
             }
         }
 
-        loadStudents();
+        (async function init() {
+            const session = await loadSession(['teacher', 'superadmin']);
+            if (!session) return;
+
+            if (session.role === 'superadmin') {
+                classId = sessionStorage.getItem('activeClassId');
+                if (!classId) {
+                    window.location.href = 'superadmin.html';
+                    return;
+                }
+                document.getElementById('className').textContent = sessionStorage.getItem('activeClassName') || '';
+                document.getElementById('backBtn').style.display = 'inline-block';
+            } else {
+                classId = session.classId;
+                document.getElementById('className').textContent = session.className || '';
+            }
+
+            loadStudents();
+        })();
     </script>
 </body>
 </html>

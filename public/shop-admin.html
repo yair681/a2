@@ -311,16 +311,9 @@
         </div>
     </div>
 
+    <script src="common.js"></script>
     <script>
-        const classId = localStorage.getItem('classId');
-        const className = localStorage.getItem('className');
-        const isSuperadmin = localStorage.getItem('superadminMode') === 'true';
-        const isTeacher = localStorage.getItem('teacherAuth') === 'true';
-
-        if (!classId || (!isSuperadmin && !isTeacher)) {
-            window.location.href = 'index.html';
-        }
-
+        let classId = null;
         let currentEditProductId = null;
 
         // תצוגה מקדימה של תמונה
@@ -407,24 +400,14 @@
             }
 
             try {
-                const res = await fetch('/api/products', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        name, 
-                        price: parseInt(price),
-                        stock: parseInt(stock) || 0,
-                        description,
-                        image: imageBase64,
-                        classId
-                    })
+                const data = await apiPost('/api/products', {
+                    name,
+                    price: parseInt(price, 10),
+                    stock: parseInt(stock, 10) || 0,
+                    description,
+                    image: imageBase64,
+                    classId
                 });
-                
-                if (!res.ok) {
-                    throw new Error('שגיאת רשת');
-                }
-                
-                const data = await res.json();
 
                 if (data.success) {
                     showMessage('productMessage', data.message, true);
@@ -444,33 +427,22 @@
         }
 
         async function loadProducts() {
-            console.log('🔄 טוען מוצרים...');
-            console.log('📍 classId:', classId);
-            
-            const res = await fetch(`/api/products/${classId}`);
-            console.log('📡 תגובת שרת - סטטוס:', res.status);
-            
-            const products = await res.json();
-            console.log('📦 מוצרים שהתקבלו:', products);
-            console.log('🔢 מספר מוצרים:', products.length);
-            
+            const products = await apiJson(`/api/products/${classId}`);
             const list = document.getElementById('productsList');
 
             if (products.length === 0) {
-                console.log('⚠️ אין מוצרים להצגה');
                 list.innerHTML = '<p style="text-align: center; color: #6c757d;">אין עדיין מוצרים בחנות</p>';
                 return;
             }
 
-            console.log('✅ מציג', products.length, 'מוצרים');
             list.innerHTML = '';
             products.forEach(p => {
                 const div = document.createElement('div');
                 div.className = 'product-item';
                 
                 let imageHTML = '';
-                if (p.image) {
-                    imageHTML = `<img src="${p.image}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin-left: 15px;">`;
+                if (typeof p.image === 'string' && p.image.startsWith('data:image/')) {
+                    imageHTML = `<img src="${esc(p.image)}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin-left: 15px;">`;
                 }
                 
                 let stockClass = 'stock-ok';
@@ -486,16 +458,21 @@
                 div.innerHTML = `
                     ${imageHTML}
                     <div class="product-info">
-                        <div class="product-name">${p.name}</div>
-                        <div>${p.description || ''}</div>
-                        <div class="product-price">${p.price} נקודות</div>
-                        <div class="stock-info ${stockClass}">${stockText}</div>
+                        <div class="product-name">${esc(p.name)}</div>
+                        <div>${esc(p.description || '')}</div>
+                        <div class="product-price">${esc(p.price)} נקודות</div>
+                        <div class="stock-info ${stockClass}">${esc(stockText)}</div>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 5px;">
-                        <button class="btn btn-info" onclick="openStockModal('${p._id}', '${p.name}', ${p.stock})">📦 עדכן מלאי</button>
-                        <button class="btn btn-danger" onclick="deleteProduct('${p._id}')">מחק</button>
+                        <button class="btn btn-info">📦 עדכן מלאי</button>
+                        <button class="btn btn-danger">מחק</button>
                     </div>
                 `;
+
+                const [stockBtn, deleteBtn] = div.querySelectorAll('button');
+                stockBtn.onclick = () => openStockModal(p._id, p.name, p.stock);
+                deleteBtn.onclick = () => deleteProduct(p._id);
+
                 list.appendChild(div);
             });
         }
@@ -514,20 +491,15 @@
         }
 
         async function saveStock() {
-            const newStock = document.getElementById('newStock').value;
-            
-            if (newStock === '' || newStock < 0) {
+            const newStock = parseInt(document.getElementById('newStock').value, 10);
+
+            if (!Number.isFinite(newStock) || newStock < 0) {
                 alert('נא להזין מלאי חוקי');
                 return;
             }
 
-            const res = await fetch(`/api/products/${currentEditProductId}/stock`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ stock: parseInt(newStock) })
-            });
-            const data = await res.json();
-            
+            const data = await apiPost(`/api/products/${currentEditProductId}/stock`, { stock: newStock });
+
             if (data.success) {
                 alert(data.message);
                 closeStockModal();
@@ -540,10 +512,7 @@
         async function deleteProduct(id) {
             if (!confirm('האם למחוק מוצר זה?')) return;
 
-            const res = await fetch(`/api/products/${id}`, {
-                method: 'DELETE'
-            });
-            const data = await res.json();
+            const data = await apiJson(`/api/products/${id}`, { method: 'DELETE' });
 
             if (data.success) {
                 loadProducts();
@@ -553,8 +522,7 @@
         }
 
         async function loadPendingPurchases() {
-            const res = await fetch(`/api/purchases/${classId}`);
-            const purchases = await res.json();
+            const purchases = await apiJson(`/api/purchases/${classId}`);
             const pending = purchases.filter(p => p.status === 'pending');
             
             // עדכון תג התראה
@@ -574,46 +542,47 @@
             }
 
             list.innerHTML = '';
+
+            // רשימת המוצרים נטענת פעם אחת ולא פעם לכל בקשה ממתינה
+            const products = await apiJson(`/api/products/${classId}`);
+
             for (const p of pending) {
-                // בדיקת מלאי עבור כל קניה
-                const productRes = await fetch(`/api/products/${classId}`);
-                const products = await productRes.json();
                 const product = products.find(prod => prod._id === p.productId);
-                
+
                 const div = document.createElement('div');
                 div.className = 'purchase-item';
-                
+
                 let stockWarning = '';
                 if (product && product.stock <= 0) {
                     stockWarning = '<div style="color: #dc3545; font-weight: bold; margin-top: 5px;">⚠️ המוצר אזל מהמלאי!</div>';
                 }
-                
+
                 div.innerHTML = `
                     <div class="purchase-info">
-                        <div class="purchase-product">${p.productName}</div>
-                        <div>תלמיד: ${p.studentName} (${p.studentId})</div>
-                        <div class="purchase-price">מחיר: ${p.price} נקודות</div>
+                        <div class="purchase-product">${esc(p.productName)}</div>
+                        <div>תלמיד: ${esc(p.studentName)} (${esc(p.studentId)})</div>
+                        <div class="purchase-price">מחיר: ${esc(p.price)} נקודות</div>
                         <div style="font-size: 0.9em; color: #6c757d;">
                             תאריך: ${new Date(p.createdAt).toLocaleDateString('he-IL')}
                         </div>
                         ${stockWarning}
                     </div>
                     <div>
-                        <button class="btn btn-success" onclick="approvePurchase('${p._id}', true)" ${product && product.stock <= 0 ? 'disabled' : ''}>✓ אשר</button>
-                        <button class="btn btn-reject" onclick="approvePurchase('${p._id}', false)">✗ דחה</button>
+                        <button class="btn btn-success" ${product && product.stock <= 0 ? 'disabled' : ''}>✓ אשר</button>
+                        <button class="btn btn-reject">✗ דחה</button>
                     </div>
                 `;
+
+                const [approveBtn, rejectBtn] = div.querySelectorAll('button');
+                approveBtn.onclick = () => approvePurchase(p._id, true);
+                rejectBtn.onclick = () => approvePurchase(p._id, false);
+
                 list.appendChild(div);
             }
         }
 
         async function approvePurchase(id, approve) {
-            const res = await fetch(`/api/purchases/${id}/approve`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ approve })
-            });
-            const data = await res.json();
+            const data = await apiPost(`/api/purchases/${id}/approve`, { approve });
 
             if (data.success) {
                 alert(data.message);
@@ -625,8 +594,7 @@
         }
 
         async function loadPurchaseHistory() {
-            const res = await fetch(`/api/purchases/${classId}`);
-            const purchases = await res.json();
+            const purchases = await apiJson(`/api/purchases/${classId}`);
             const list = document.getElementById('historyList');
 
             if (purchases.length === 0) {
@@ -650,9 +618,9 @@
 
                 div.innerHTML = `
                     <div class="purchase-info">
-                        <div class="purchase-product">${p.productName} ${statusBadge}</div>
-                        <div>תלמיד: ${p.studentName} (${p.studentId})</div>
-                        <div class="purchase-price">מחיר: ${p.price} נקודות</div>
+                        <div class="purchase-product">${esc(p.productName)} ${statusBadge}</div>
+                        <div>תלמיד: ${esc(p.studentName)} (${esc(p.studentId)})</div>
+                        <div class="purchase-price">מחיר: ${esc(p.price)} נקודות</div>
                         <div style="font-size: 0.9em; color: #6c757d;">
                             תאריך בקשה: ${new Date(p.createdAt).toLocaleDateString('he-IL')}
                             ${p.approvedAt ? ' | אושר ב: ' + new Date(p.approvedAt).toLocaleDateString('he-IL') : ''}
@@ -663,10 +631,24 @@
             });
         }
 
-        // טעינה ראשונית + רענון תקופתי של התראות
-        loadProducts();
-        loadPendingPurchases();
-        setInterval(loadPendingPurchases, 30000); // רענון כל 30 שניות
+        (async function init() {
+            const session = await loadSession(['teacher', 'superadmin']);
+            if (!session) return;
+
+            if (session.role === 'superadmin') {
+                classId = sessionStorage.getItem('activeClassId');
+                if (!classId) {
+                    window.location.href = 'superadmin.html';
+                    return;
+                }
+            } else {
+                classId = session.classId;
+            }
+
+            await loadProducts();
+            await loadPendingPurchases();
+            setInterval(loadPendingPurchases, 30000); // רענון כל 30 שניות
+        })();
     </script>
 </body>
 </html>

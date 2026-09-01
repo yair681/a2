@@ -423,23 +423,9 @@
         </div>
     </div>
 
+    <script src="common.js"></script>
     <script>
-        const studentCode = localStorage.getItem('studentCode');
-        const studentName = localStorage.getItem('studentName');
-        const className = localStorage.getItem('className');
-        const classId = localStorage.getItem('classId');
-        
-        if (!studentCode || !classId) {
-            window.location.href = 'index.html';
-        }
-
-        document.getElementById('studentName').textContent = studentName || '';
-        document.getElementById('className').textContent = className || '';
-
-        function logout() {
-            localStorage.clear();
-            window.location.href = 'index.html';
-        }
+        let classId = null;
 
         function showMessage(message, isSuccess) {
             const el = document.getElementById('message');
@@ -449,20 +435,16 @@
         }
 
         async function loadBalance() {
-            const res = await fetch('/api/my-balance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: studentCode })
-            });
-            const data = await res.json();
-            document.getElementById('balance').innerText = data.balance.toLocaleString('he-IL');
-            return data.balance;
+            const data = await apiJson('/api/my-balance');
+            const balance = Number(data.balance);
+            const safeBalance = Number.isFinite(balance) ? balance : 0;
+            document.getElementById('balance').innerText = safeBalance.toLocaleString('he-IL');
+            return safeBalance;
         }
 
         async function loadRewards() {
             document.getElementById('loading').style.display = 'block';
-            const res = await fetch(`/api/rewards/${classId}`);
-            const rewards = await res.json();
+            const rewards = await apiJson(`/api/rewards/class/${classId}`);
             const list = document.getElementById('rewardsList');
             list.innerHTML = '';
             document.getElementById('loading').style.display = 'none';
@@ -481,9 +463,8 @@
             }
 
             for (const reward of rewards) {
-                const statsRes = await fetch(`/api/rewards/${reward._id}/stats`);
-                const stats = await statsRes.json();
-                
+                const stats = await apiJson(`/api/rewards/${reward._id}/stats`);
+
                 const percentage = Math.min(100, (reward.currentAmount / reward.targetAmount) * 100);
                 const remaining = Math.max(0, reward.targetAmount - reward.currentAmount);
                 
@@ -491,10 +472,10 @@
                 div.className = `reward-card ${reward.completed ? 'completed' : ''}`;
                 div.innerHTML = `
                     <div class="reward-header">
-                        <div class="reward-title">${reward.name}</div>
+                        <div class="reward-title">${esc(reward.name)}</div>
                         ${reward.completed ? '<div class="completed-badge">✓ הפרס הושג!</div>' : ''}
                     </div>
-                    ${reward.description ? `<div class="reward-description">${reward.description}</div>` : ''}
+                    ${reward.description ? `<div class="reward-description">${esc(reward.description)}</div>` : ''}
                     <div class="progress-container">
                         <div class="progress-bar-bg">
                             <div class="progress-bar ${reward.completed ? 'completed' : ''}" style="width: ${percentage}%">
@@ -523,14 +504,14 @@
                         <div class="contribute-section">
                             <div class="contribute-header">💝 תרום נקודות לפרס</div>
                             <div class="contribute-controls">
-                                <input type="number" class="amount-input" id="amount-${reward._id}" placeholder="כמה תרצה לתרום?" min="1">
-                                <button class="btn-contribute" onclick="contribute('${reward._id}')">תרום</button>
+                                <input type="number" class="amount-input" id="amount-${esc(reward._id)}" placeholder="כמה תרצה לתרום?" min="1">
+                                <button class="btn-contribute" onclick="contribute('${esc(reward._id)}')">תרום</button>
                             </div>
                             <div class="quick-amounts">
-                                <button class="quick-amount-btn" onclick="setAmount('${reward._id}', 10)">10</button>
-                                <button class="quick-amount-btn" onclick="setAmount('${reward._id}', 25)">25</button>
-                                <button class="quick-amount-btn" onclick="setAmount('${reward._id}', 50)">50</button>
-                                <button class="quick-amount-btn" onclick="setAmount('${reward._id}', 100)">100</button>
+                                <button class="quick-amount-btn" onclick="setAmount('${esc(reward._id)}', 10)">10</button>
+                                <button class="quick-amount-btn" onclick="setAmount('${esc(reward._id)}', 25)">25</button>
+                                <button class="quick-amount-btn" onclick="setAmount('${esc(reward._id)}', 50)">50</button>
+                                <button class="quick-amount-btn" onclick="setAmount('${esc(reward._id)}', 100)">100</button>
                             </div>
                         </div>
                     ` : ''}
@@ -563,13 +544,10 @@
                 return;
             }
 
-            const res = await fetch(`/api/rewards/${rewardId}/contribute`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studentId: studentCode, amount, classId })
-            });
-            const data = await res.json();
-            
+            // הזהות נקבעת בשרת לפי הסשן. גם הבדיקה שהסכום חיובי מתבצעת שם,
+            // כך שסכום שלילי מה-console כבר לא מוסיף נקודות.
+            const data = await apiPost(`/api/rewards/${rewardId}/contribute`, { amount });
+
             if (data.success) {
                 showMessage(`🎉 תרמת ${amount} נקודות! כל הכבוד!`, true);
                 amountInput.value = '';
@@ -586,13 +564,22 @@
             }
         }
 
-        loadBalance();
-        loadRewards();
-        
-        // רענון יתרה כל 30 שניות
-        setInterval(loadBalance, 30000);
-        // רענון פרסים כל דקה
-        setInterval(loadRewards, 60000);
+        (async function init() {
+            const session = await loadSession(['student']);
+            if (!session) return;
+
+            classId = session.classId;
+            document.getElementById('studentName').textContent = session.name || '';
+            document.getElementById('className').textContent = session.className || '';
+
+            await loadBalance();
+            await loadRewards();
+
+            // רענון יתרה כל 30 שניות
+            setInterval(loadBalance, 30000);
+            // רענון פרסים כל דקה
+            setInterval(loadRewards, 60000);
+        })();
     </script>
 </body>
 </html>

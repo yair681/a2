@@ -119,37 +119,31 @@
     <button onclick="window.location.href='shop-student.html'" style="background-color: #17a2b8; margin-bottom: 10px;">🛒 עבור לחנות</button>
     <button onclick="logout()">יציאה והתנתקות</button>
 
+    <script src="common.js"></script>
     <script>
-        const studentCode = localStorage.getItem('studentCode');
-        const studentName = localStorage.getItem('studentName');
-        const className = localStorage.getItem('className');
-        
-        if (!studentCode) {
-            window.location.href = 'index.html';
-        }
-
-        function logout() {
-            localStorage.clear();
-            window.location.href = 'index.html';
-        }
-
         async function loadBalance() {
-            document.getElementById('greeting').innerText = `שלום ${studentName}! כל הכבוד!`;
-            document.getElementById('classBadge').innerText = className || '';
-
-            const res = await fetch('/api/my-balance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: studentCode })
-            });
-            const data = await res.json();
-            document.getElementById('balance').innerText = data.balance.toLocaleString('en-US'); 
+            try {
+                const data = await apiJson('/api/my-balance');
+                const balance = Number(data.balance);
+                document.getElementById('balance').innerText =
+                    Number.isFinite(balance) ? balance.toLocaleString('en-US') : '---';
+            } catch (error) {
+                document.getElementById('balance').innerText = '---';
+            }
         }
 
-        loadBalance();
-        
-        // רענון יתרה כל 30 שניות
-        setInterval(loadBalance, 30000);
+        (async function init() {
+            const session = await loadSession(['student']);
+            if (!session) return;
+
+            document.getElementById('greeting').innerText = `שלום ${session.name}! כל הכבוד!`;
+            document.getElementById('classBadge').innerText = session.className || '';
+
+            await loadBalance();
+
+            // רענון יתרה כל 30 שניות
+            setInterval(loadBalance, 30000);
+        })();
     </script>
 </body>
 </html>

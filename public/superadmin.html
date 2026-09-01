@@ -164,18 +164,23 @@
         </div>
     </div>
 
+    <!-- איפוס סיסמת מורה -->
+    <div id="resetModal" style="display: none; position: fixed; z-index: 1000; inset: 0; background: rgba(0,0,0,0.5);">
+        <div style="background: white; margin: 10% auto; padding: 30px; border-radius: 12px; width: 400px; max-width: 90%;">
+            <h3 style="margin-top: 0;">איפוס סיסמת מורה</h3>
+            <div id="resetClassName" style="margin-bottom: 15px; color: #666;"></div>
+            <input type="password" id="newTeacherPassword" placeholder="סיסמה חדשה (8 תווים לפחות)">
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button class="logout-btn" style="flex: 1;" onclick="closeResetModal()">ביטול</button>
+                <button class="btn-primary" style="flex: 1;" onclick="saveTeacherPassword()">שמור</button>
+            </div>
+            <div id="resetMessage"></div>
+        </div>
+    </div>
+
+    <script src="common.js"></script>
     <script>
-        // בדיקת הרשאות
-        if (!localStorage.getItem('superadminAuth')) {
-            window.location.href = 'index.html';
-        }
-
-        document.getElementById('adminName').textContent = localStorage.getItem('superadminName') || '';
-
-        function logout() {
-            localStorage.clear();
-            window.location.href = 'index.html';
-        }
+        let currentResetClassId = null;
 
         function showMessage(elementId, message, isSuccess) {
             const el = document.getElementById(elementId);
@@ -194,13 +199,13 @@
                 return;
             }
 
-            const res = await fetch('/api/classes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: className, teacherName, teacherPassword })
-            });
-            const data = await res.json();
-            
+            if (teacherPassword.length < 8) {
+                showMessage('createMessage', 'סיסמת המורה חייבת להיות באורך 8 תווים לפחות.', false);
+                return;
+            }
+
+            const data = await apiPost('/api/classes', { name: className, teacherName, teacherPassword });
+
             if (data.success) {
                 showMessage('createMessage', data.message, true);
                 document.getElementById('className').value = '';
@@ -214,8 +219,7 @@
 
         async function loadClasses() {
             document.getElementById('loading').style.display = 'block';
-            const res = await fetch('/api/classes');
-            const classes = await res.json();
+            const classes = await apiJson('/api/classes');
             const list = document.getElementById('classesList');
             list.innerHTML = '';
             document.getElementById('loading').style.display = 'none';
@@ -228,38 +232,75 @@
             classes.forEach(c => {
                 const div = document.createElement('div');
                 div.className = 'class-row';
+                // הסיסמאות שמורות מוצפנות בשרת ולא ניתנות לצפייה — אפשר רק לאפס אותן
                 div.innerHTML = `
                     <div class="class-info">
-                        <div class="class-name">${c.name}</div>
-                        <div class="class-teacher">מורה: ${c.teacherName}</div>
-                        <div class="class-teacher">סיסמת מורה: <strong style="color: #007bff; font-size: 1.1em;">${c.teacherPassword}</strong></div>
+                        <div class="class-name">${esc(c.name)}</div>
+                        <div class="class-teacher">מורה: ${esc(c.teacherName)}</div>
                     </div>
                     <div class="actions">
-                        <button class="btn-info" onclick="enterClass('${c._id}', '${c.name}')">כנס לכיתה</button>
-                        <button class="btn-danger" onclick="deleteClass('${c._id}', '${c.name}')">מחק</button>
+                        <button class="btn-info">כנס לכיתה</button>
+                        <button class="logout-btn">איפוס סיסמה</button>
+                        <button class="btn-danger">מחק</button>
                     </div>
                 `;
+
+                const [enterBtn, resetBtn, deleteBtn] = div.querySelectorAll('.actions button');
+                enterBtn.onclick = () => enterClass(c._id, c.name);
+                resetBtn.onclick = () => openResetModal(c._id, c.name);
+                deleteBtn.onclick = () => deleteClass(c._id, c.name);
+
                 list.appendChild(div);
             });
         }
 
         function enterClass(classId, className) {
-            // שמירת מצב מנהל-על
-            localStorage.setItem('superadminMode', 'true');
-            localStorage.setItem('classId', classId);
-            localStorage.setItem('className', className);
+            // רק סימון נוחות לתצוגה. השרת בודק בעצמו שהמשתמש הוא מנהל-על
+            // לפני שהוא נותן גישה לנתוני הכיתה.
+            sessionStorage.setItem('activeClassId', classId);
+            sessionStorage.setItem('activeClassName', className);
             window.location.href = 'admin.html';
         }
 
-        async function deleteClass(classId, className) {
-            if (!confirm(`האם אתה בטוח שברצונך למחוק את "${className}"?\n\nפעולה זו תמחק את כל התלמידים, המוצרים והקניות של הכיתה ולא ניתן לבטל אותה!`)) {
+        function openResetModal(classId, className) {
+            currentResetClassId = classId;
+            document.getElementById('resetClassName').textContent = `כיתה: ${className}`;
+            document.getElementById('newTeacherPassword').value = '';
+            document.getElementById('resetModal').style.display = 'block';
+        }
+
+        function closeResetModal() {
+            document.getElementById('resetModal').style.display = 'none';
+            currentResetClassId = null;
+        }
+
+        async function saveTeacherPassword() {
+            const teacherPassword = document.getElementById('newTeacherPassword').value.trim();
+
+            if (teacherPassword.length < 8) {
+                showMessage('resetMessage', 'הסיסמה חייבת להיות באורך 8 תווים לפחות.', false);
                 return;
             }
 
-            const res = await fetch(`/api/classes/${classId}`, {
-                method: 'DELETE'
+            const data = await apiJson(`/api/classes/${currentResetClassId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ teacherPassword })
             });
-            const data = await res.json();
+
+            if (data.success) {
+                closeResetModal();
+                alert('הסיסמה עודכנה. מסור אותה למורה — היא לא תוצג שוב.');
+            } else {
+                showMessage('resetMessage', data.message, false);
+            }
+        }
+
+        async function deleteClass(classId, className) {
+            if (!confirm(`האם אתה בטוח שברצונך למחוק את "${className}"?\n\nפעולה זו תמחק את כל התלמידים, המוצרים, הפרסים והקניות של הכיתה ולא ניתן לבטל אותה!`)) {
+                return;
+            }
+
+            const data = await apiJson(`/api/classes/${classId}`, { method: 'DELETE' });
 
             if (data.success) {
                 alert(data.message);
@@ -269,7 +310,13 @@
             }
         }
 
-        loadClasses();
+        (async function init() {
+            const session = await loadSession(['superadmin']);
+            if (!session) return;
+
+            document.getElementById('adminName').textContent = session.name || '';
+            loadClasses();
+        })();
     </script>
 </body>
 </html>

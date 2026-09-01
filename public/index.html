@@ -23,45 +23,52 @@
         <p id="error" style="color:red;"></p>
     </div>
 
+    <script src="common.js"></script>
     <script>
+        // ההתחברות מחזירה עוגיית סשן חתומה (httpOnly) שהדפדפן לא יכול לקרוא
+        // או לזייף. אין יותר דגלי הרשאה ב-localStorage.
         async function login() {
             const code = document.getElementById('code').value.trim();
+            const errorEl = document.getElementById('error');
 
             if (!code) {
-                document.getElementById('error').innerText = 'נא להזין סיסמה או קוד';
+                errorEl.innerText = 'נא להזין סיסמה או קוד';
                 return;
             }
 
-            const res = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code })
-            });
+            errorEl.innerText = '';
 
-            const data = await res.json();
-            if (data.success) {
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+
+                if (res.status === 429) {
+                    errorEl.innerText = 'יותר מדי ניסיונות התחברות. נסה שוב בעוד 15 דקות.';
+                    return;
+                }
+
+                const data = await res.json();
+
+                if (!data.success) {
+                    errorEl.innerText = data.message || 'קוד או סיסמה שגויים';
+                    return;
+                }
+
+                sessionStorage.clear();
+
                 if (data.role === 'superadmin') {
-                    // מנהל-על
-                    localStorage.setItem('superadminAuth', 'true');
-                    localStorage.setItem('superadminName', data.name);
                     window.location.href = 'superadmin.html';
                 } else if (data.role === 'teacher') {
-                    // מורה רגיל
-                    localStorage.setItem('teacherAuth', 'true');
-                    localStorage.setItem('classId', data.classId);
-                    localStorage.setItem('className', data.className);
-                    localStorage.setItem('teacherName', data.teacherName);
                     window.location.href = 'admin.html';
                 } else {
-                    // תלמיד
-                    localStorage.setItem('studentCode', data.studentId);
-                    localStorage.setItem('studentName', data.name);
-                    localStorage.setItem('classId', data.classId);
-                    localStorage.setItem('className', data.className);
                     window.location.href = 'student.html';
                 }
-            } else {
-                document.getElementById('error').innerText = data.message;
+            } catch (error) {
+                errorEl.innerText = 'שגיאה בחיבור לשרת. נסה שוב.';
             }
         }
 
