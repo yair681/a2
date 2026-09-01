@@ -231,16 +231,9 @@
         <div id="purchasesList"></div>
     </div>
 
+    <script src="common.js"></script>
     <script>
-        const studentCode = localStorage.getItem('studentCode');
-        const studentName = localStorage.getItem('studentName');
-        const classId = localStorage.getItem('classId');
-        const className = localStorage.getItem('className');
-        
-        if (!studentCode || !classId) {
-            window.location.href = 'index.html';
-        }
-
+        let classId = null;
         let currentBalance = 0;
 
         function showTab(tabName) {
@@ -266,19 +259,14 @@
         }
 
         async function loadBalance() {
-            const res = await fetch('/api/my-balance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: studentCode })
-            });
-            const data = await res.json();
-            currentBalance = data.balance;
-            document.getElementById('balanceDisplay').textContent = data.balance.toLocaleString('en-US');
+            const data = await apiJson('/api/my-balance');
+            const balance = Number(data.balance);
+            currentBalance = Number.isFinite(balance) ? balance : 0;
+            document.getElementById('balanceDisplay').textContent = currentBalance.toLocaleString('en-US');
         }
 
         async function loadProducts() {
-            const res = await fetch(`/api/products/${classId}`);
-            const products = await res.json();
+            const products = await apiJson(`/api/products/${classId}`);
             const grid = document.getElementById('productsGrid');
 
             if (products.length === 0) {
@@ -300,8 +288,8 @@
                 
                 // הוספת תמונה אם קיימת
                 let imageHTML = '';
-                if (p.image) {
-                    imageHTML = `<img src="${p.image}" class="product-image" alt="${p.name}">`;
+                if (typeof p.image === 'string' && p.image.startsWith('data:image/')) {
+                    imageHTML = `<img src="${esc(p.image)}" class="product-image" alt="${esc(p.name)}">`;
                 }
                 
                 // תג מלאי
@@ -327,16 +315,14 @@
                 
                 div.innerHTML = `
                     ${imageHTML}
-                    <div class="product-name">${p.name}</div>
-                    <div class="product-description">${p.description || 'מוצר נהדר!'}</div>
-                    <div class="product-price">${p.price} נקודות</div>
+                    <div class="product-name">${esc(p.name)}</div>
+                    <div class="product-description">${esc(p.description || 'מוצר נהדר!')}</div>
+                    <div class="product-price">${esc(p.price)} נקודות</div>
                     ${stockBadge}
-                    <button class="btn btn-buy" 
-                            onclick="buyProduct('${p._id}', '${p.name}', ${p.price})" 
-                            ${buttonDisabled}>
-                        ${buttonText}
-                    </button>
+                    <button class="btn btn-buy" ${buttonDisabled}>${buttonText}</button>
                 `;
+
+                div.querySelector('.btn-buy').onclick = () => buyProduct(p._id, p.name, p.price);
                 grid.appendChild(div);
             });
         }
@@ -346,16 +332,8 @@
                 return;
             }
 
-            const res = await fetch('/api/purchase', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    studentId: studentCode,
-                    productId: productId,
-                    classId: classId
-                })
-            });
-            const data = await res.json();
+            // התלמיד והכיתה נקבעים בשרת לפי הסשן, לא נשלחים מכאן
+            const data = await apiPost('/api/purchase', { productId });
 
             if (data.success) {
                 showMessage('✅ ' + data.message + ' תקבל התראה כשהמורה יאשר!', true);
@@ -366,8 +344,7 @@
         }
 
         async function loadMyPurchases() {
-            const res = await fetch(`/api/purchases/${classId}/${studentCode}`);
-            const purchases = await res.json();
+            const purchases = await apiJson('/api/my-purchases');
             const list = document.getElementById('purchasesList');
 
             if (purchases.length === 0) {
@@ -395,11 +372,11 @@
 
                 div.innerHTML = `
                     <div class="purchase-header">
-                        <div class="purchase-name">${p.productName}</div>
+                        <div class="purchase-name">${esc(p.productName)}</div>
                         ${statusBadge}
                     </div>
                     <div style="color: #666; margin-bottom: 5px;">${statusText}</div>
-                    <div style="font-weight: bold; color: #28a745;">${p.price} נקודות</div>
+                    <div style="font-weight: bold; color: #28a745;">${esc(p.price)} נקודות</div>
                     <div style="font-size: 0.9em; color: #999; margin-top: 5px;">
                         תאריך: ${new Date(p.createdAt).toLocaleDateString('he-IL')}
                         ${p.approvedAt ? ' | אושר ב: ' + new Date(p.approvedAt).toLocaleDateString('he-IL') : ''}
@@ -409,18 +386,24 @@
             });
         }
 
-        // טעינה ראשונית
-        loadBalance();
-        loadProducts();
-        
-        // רענון יתרה וקניות כל 30 שניות
-        setInterval(() => {
-            loadBalance();
-            loadProducts(); // רענון גם של המוצרים כדי לעדכן מלאי
-            if (document.getElementById('purchasesTab').classList.contains('active')) {
-                loadMyPurchases();
-            }
-        }, 30000);
+        (async function init() {
+            const session = await loadSession(['student']);
+            if (!session) return;
+
+            classId = session.classId;
+
+            await loadBalance();
+            await loadProducts();
+
+            // רענון יתרה וקניות כל 30 שניות
+            setInterval(async () => {
+                await loadBalance();
+                await loadProducts(); // רענון גם של המוצרים כדי לעדכן מלאי
+                if (document.getElementById('purchasesTab').classList.contains('active')) {
+                    await loadMyPurchases();
+                }
+            }, 30000);
+        })();
     </script>
 </body>
 </html>

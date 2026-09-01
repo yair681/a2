@@ -283,34 +283,15 @@
         </div>
     </div>
 
+    <script src="common.js"></script>
     <script>
-        const classId = localStorage.getItem('classId');
-        const className = localStorage.getItem('className');
-        const isSuperadmin = localStorage.getItem('superadminMode') === 'true';
-        const isTeacher = localStorage.getItem('teacherAuth') === 'true';
-
-        if (!classId || (!isSuperadmin && !isTeacher)) {
-            window.location.href = 'index.html';
-        }
-
-        document.getElementById('className').textContent = className || '';
-        
-        if (isSuperadmin) {
-            document.getElementById('backBtn').style.display = 'inline-block';
-        }
-
+        let classId = null;
         let currentEditRewardId = null;
 
         function backToSuperadmin() {
-            localStorage.removeItem('superadminMode');
-            localStorage.removeItem('classId');
-            localStorage.removeItem('className');
+            sessionStorage.removeItem('activeClassId');
+            sessionStorage.removeItem('activeClassName');
             window.location.href = 'superadmin.html';
-        }
-
-        function logout() {
-            localStorage.clear();
-            window.location.href = 'index.html';
         }
 
         function showMessage(message, isSuccess) {
@@ -330,13 +311,8 @@
                 return;
             }
 
-            const res = await fetch('/api/rewards', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, description, targetAmount, classId })
-            });
-            const data = await res.json();
-            
+            const data = await apiPost('/api/rewards', { name, description, targetAmount, classId });
+
             if (data.success) {
                 showMessage(data.message, true);
                 document.getElementById('rewardName').value = '';
@@ -350,8 +326,7 @@
 
         async function loadRewards() {
             document.getElementById('loading').style.display = 'block';
-            const res = await fetch(`/api/rewards/${classId}`);
-            const rewards = await res.json();
+            const rewards = await apiJson(`/api/rewards/class/${classId}`);
             const list = document.getElementById('rewardsList');
             list.innerHTML = '';
             document.getElementById('loading').style.display = 'none';
@@ -362,19 +337,18 @@
             }
 
             for (const reward of rewards) {
-                const statsRes = await fetch(`/api/rewards/${reward._id}/stats`);
-                const stats = await statsRes.json();
-                
+                const stats = await apiJson(`/api/rewards/${reward._id}/stats`);
+
                 const percentage = Math.min(100, (reward.currentAmount / reward.targetAmount) * 100);
                 
                 const div = document.createElement('div');
                 div.className = `reward-card ${reward.completed ? 'completed' : ''}`;
                 div.innerHTML = `
                     <div class="reward-header">
-                        <div class="reward-title">${reward.name}</div>
+                        <div class="reward-title">${esc(reward.name)}</div>
                         ${reward.completed ? '<div class="completed-badge">✓ הושג!</div>' : ''}
                     </div>
-                    ${reward.description ? `<div class="reward-description">${reward.description}</div>` : ''}
+                    ${reward.description ? `<div class="reward-description">${esc(reward.description)}</div>` : ''}
                     <div class="progress-container">
                         <div class="progress-bar-bg">
                             <div class="progress-bar ${reward.completed ? 'completed' : ''}" style="width: ${percentage}%">
@@ -389,10 +363,15 @@
                         📊 סך תרומות: ${stats.totalContributions} | סך נקודות שנתרמו: ${stats.totalAmount.toLocaleString('he-IL')}
                     </div>
                     <div class="reward-actions">
-                        <button class="btn-edit" onclick="openEditModal('${reward._id}', '${reward.name.replace(/'/g, "\\'")}', '${(reward.description || '').replace(/'/g, "\\'")}', ${reward.targetAmount})">✏️ ערוך</button>
-                        <button class="btn-delete" onclick="deleteReward('${reward._id}', '${reward.name.replace(/'/g, "\\'")}')">🗑️ מחק</button>
+                        <button class="btn-edit">✏️ ערוך</button>
+                        <button class="btn-delete">🗑️ מחק</button>
                     </div>
                 `;
+
+                const [editBtn, deleteBtn] = div.querySelectorAll('.reward-actions button');
+                editBtn.onclick = () => openEditModal(reward._id, reward.name, reward.description || '', reward.targetAmount);
+                deleteBtn.onclick = () => deleteReward(reward._id, reward.name);
+
                 list.appendChild(div);
             }
         }
@@ -420,13 +399,11 @@
                 return;
             }
 
-            const res = await fetch(`/api/rewards/${currentEditRewardId}`, {
+            const data = await apiJson(`/api/rewards/${currentEditRewardId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, description, targetAmount })
             });
-            const data = await res.json();
-            
+
             if (data.success) {
                 closeEditModal();
                 loadRewards();
@@ -440,10 +417,7 @@
                 return;
             }
 
-            const res = await fetch(`/api/rewards/${id}`, {
-                method: 'DELETE'
-            });
-            const data = await res.json();
+            const data = await apiJson(`/api/rewards/${id}`, { method: 'DELETE' });
 
             if (data.success) {
                 alert(data.message);
@@ -453,7 +427,25 @@
             }
         }
 
-        loadRewards();
+        (async function init() {
+            const session = await loadSession(['teacher', 'superadmin']);
+            if (!session) return;
+
+            if (session.role === 'superadmin') {
+                classId = sessionStorage.getItem('activeClassId');
+                if (!classId) {
+                    window.location.href = 'superadmin.html';
+                    return;
+                }
+                document.getElementById('className').textContent = sessionStorage.getItem('activeClassName') || '';
+                document.getElementById('backBtn').style.display = 'inline-block';
+            } else {
+                classId = session.classId;
+                document.getElementById('className').textContent = session.className || '';
+            }
+
+            loadRewards();
+        })();
     </script>
 </body>
 </html>
