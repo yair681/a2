@@ -90,6 +90,16 @@ const loginLimiter = rateLimit({
     message: { success: false, message: 'יותר מדי ניסיונות התחברות. נסה שוב בעוד 15 דקות.' }
 });
 
+// ההרשמה דרך קישור היא הנתיב היחיד שכותב למסד בלי התחברות,
+// ולכן היא מוגבלת בנפרד ובחומרה.
+const registerLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'יותר מדי בקשות. נסה שוב בעוד כמה דקות.' }
+});
+
 mongoose.connect(mongoURI)
     .then(async () => {
         console.log('MongoDB Connected Successfully!');
@@ -179,6 +189,23 @@ const rewardContributionSchema = new mongoose.Schema({
 
 const RewardContribution = mongoose.model('RewardContribution', rewardContributionSchema);
 
+// --- הגדרת המבנה של קישור הרשמה ---
+// המורה מייצר קישור עם מכסת הרשמות. כשהמכסה מתמלאת הקישור ננעל
+// והמורה מקבל התראה שהוא יכול לסגור.
+const registrationLinkSchema = new mongoose.Schema({
+    token: { type: String, required: true, unique: true, index: true },
+    classId: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
+    maxRegistrations: { type: Number, required: true, min: 1, max: 200 },
+    usedCount: { type: Number, default: 0 },
+    createdAt: { type: Date, default: Date.now },
+    limitReachedAt: Date,
+    notificationDismissed: { type: Boolean, default: false }
+});
+
+registrationLinkSchema.index({ classId: 1 });
+
+const RegistrationLink = mongoose.model('RegistrationLink', registrationLinkSchema);
+
 // --- עזרי סיסמאות ---
 
 // מזהה חיפוש דטרמיניסטי: מאפשר למצוא מורה לפי סיסמה בשאילתה אחת,
@@ -199,6 +226,24 @@ async function passwordIsTaken(password, ignoreClassId = null) {
         if (await bcrypt.compare(String(password), admin.hash)) return true;
     }
     return false;
+}
+
+// קוד התלמיד הוא גם סיסמת ההתחברות שלו, ולכן הוא חייב להיות פנוי
+// בכל המערכת — גם מול קודים של תלמידים אחרים וגם מול סיסמאות מורים.
+async function studentCodeError(code) {
+    if (!code || code.length < 3) {
+        return 'קוד התלמיד חייב להיות באורך 3 תווים לפחות';
+    }
+    if (code.length > 40) {
+        return 'קוד התלמיד ארוך מדי';
+    }
+    if (await Student.exists({ id: code })) {
+        return 'הקוד הזה כבר תפוס, בחר קוד אחר';
+    }
+    if (await Class.exists({ teacherPasswordLookup: lookupHash(code) })) {
+        return 'הקוד הזה כבר תפוס, בחר קוד אחר';
+    }
+    return null;
 }
 
 // המרה חד-פעמית של סיסמאות מורים שנשמרו בטקסט גלוי בגרסה הקודמת
@@ -467,6 +512,7 @@ app.delete('/api/classes/:id', authenticate, requireRole('superadmin'), async (r
         // הפרסים והתרומות נמחקים גם הם — בגרסה הקודמת הם נשארו יתומים במסד
         await RewardContribution.deleteMany({ rewardId: { $in: rewards.map(r => r._id) } });
         await ClassReward.deleteMany({ classId });
+        await RegistrationLink.deleteMany({ classId });
         await Class.findByIdAndDelete(classId);
 
         res.json({ success: true, message: 'הכיתה נמחקה בהצלחה' });
@@ -539,16 +585,9 @@ app.post('/api/students', authenticate, requireStaff, withClass, async (req, res
             return res.json({ success: false, message: 'קוד ושם התלמיד הם שדות חובה' });
         }
 
-        if (id.length < 3) {
-            return res.json({ success: false, message: 'קוד התלמיד חייב להיות באורך 3 תווים לפחות' });
-        }
-
-        if (await Student.exists({ id })) {
-            return res.json({ success: false, message: 'קוד תלמיד זה כבר קיים במערכת' });
-        }
-
-        if (await Class.exists({ teacherPasswordLookup: lookupHash(id) })) {
-            return res.json({ success: false, message: 'הקוד הזה כבר בשימוש כסיסמת מורה, בחר קוד אחר' });
+        const codeError = await studentCodeError(id);
+        if (codeError) {
+            return res.json({ success: false, message: codeError });
         }
 
         const newStudent = new Student({
@@ -647,6 +686,167 @@ app.get('/api/my-balance', authenticate, requireRole('student'), async (req, res
     } catch (error) {
         console.error('Get balance error:', error.message);
         res.json({ balance: 0 });
+    }
+});
+
+// --- API לקישורי הרשמה ---
+
+// יצירת קישור הרשמה חדש עם מכסה
+app.post('/api/registration-links', authenticate, requireStaff, withClass, async (req, res) => {
+    try {
+        const maxRegistrations = parseInt(req.body.maxRegistrations, 10);
+
+        if (!Number.isInteger(maxRegistrations) || maxRegistrations < 1 || maxRegistrations > 200) {
+            return res.json({ success: false, message: 'מגבלת ההרשמה חייבת להיות מספר בין 1 ל-200' });
+        }
+
+        const link = new RegistrationLink({
+            token: crypto.randomBytes(16).toString('hex'),
+            classId: req.classId,
+            maxRegistrations
+        });
+        await link.save();
+
+        res.json({ success: true, message: 'הקישור נוצר בהצלחה', link });
+    } catch (error) {
+        console.error('Create registration link error:', error.message);
+        res.json({ success: false, message: 'שגיאה ביצירת הקישור' });
+    }
+});
+
+// רשימת הקישורים של הכיתה
+app.get('/api/registration-links/:classId', authenticate, requireStaff, withClass, async (req, res) => {
+    try {
+        const links = await RegistrationLink.find({ classId: req.classId }).sort({ createdAt: -1 });
+        res.json(links);
+    } catch (error) {
+        console.error('Get registration links error:', error.message);
+        res.json([]);
+    }
+});
+
+// מחיקת קישור — מרגע זה הוא מפסיק לעבוד
+app.delete('/api/registration-links/:id', authenticate, requireStaff, async (req, res) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'מזהה קישור לא תקין' });
+        }
+
+        const link = await RegistrationLink.findById(req.params.id);
+        if (!assertSameClass(req, link)) {
+            return res.status(403).json({ success: false, message: 'אין לך הרשאה לקישור זה' });
+        }
+
+        await RegistrationLink.findByIdAndDelete(link._id);
+        res.json({ success: true, message: 'הקישור נמחק והוא לא יעבוד יותר' });
+    } catch (error) {
+        console.error('Delete registration link error:', error.message);
+        res.json({ success: false, message: 'שגיאה במחיקת הקישור' });
+    }
+});
+
+// סגירת ההתראה על קישור שהתמלא. הקישור עצמו נשאר.
+app.post('/api/registration-links/:id/dismiss', authenticate, requireStaff, async (req, res) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'מזהה קישור לא תקין' });
+        }
+
+        const link = await RegistrationLink.findById(req.params.id);
+        if (!assertSameClass(req, link)) {
+            return res.status(403).json({ success: false, message: 'אין לך הרשאה לקישור זה' });
+        }
+
+        link.notificationDismissed = true;
+        await link.save();
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Dismiss notification error:', error.message);
+        res.json({ success: false, message: 'שגיאה בסגירת ההתראה' });
+    }
+});
+
+// --- הרשמה עצמית של תלמיד דרך קישור (ללא התחברות) ---
+
+// בדיקת תקינות הקישור לפני הצגת הטופס
+app.get('/api/register/:token', registerLimiter, async (req, res) => {
+    try {
+        const link = await RegistrationLink.findOne({ token: req.params.token }).populate('classId');
+
+        if (!link || !link.classId) {
+            return res.json({ valid: false, message: 'הקישור לא קיים או שהמורה ביטל אותו' });
+        }
+
+        if (link.usedCount >= link.maxRegistrations) {
+            return res.json({ valid: false, message: 'הקישור מלא. פנה למורה שלך.' });
+        }
+
+        res.json({
+            valid: true,
+            className: link.classId.name,
+            teacherName: link.classId.teacherName,
+            remaining: link.maxRegistrations - link.usedCount
+        });
+    } catch (error) {
+        console.error('Check registration link error:', error.message);
+        res.json({ valid: false, message: 'שגיאה בבדיקת הקישור' });
+    }
+});
+
+// ההרשמה עצמה
+app.post('/api/register/:token', registerLimiter, async (req, res) => {
+    try {
+        const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+        const code = typeof req.body.code === 'string' ? req.body.code.trim() : '';
+
+        if (!name || !code) {
+            return res.json({ success: false, message: 'נא למלא שם מלא וקוד אישי' });
+        }
+
+        if (name.length < 2 || name.length > 60) {
+            return res.json({ success: false, message: 'השם המלא חייב להיות באורך 2 עד 60 תווים' });
+        }
+
+        const link = await RegistrationLink.findOne({ token: req.params.token });
+        if (!link) {
+            return res.json({ success: false, message: 'הקישור לא קיים או שהמורה ביטל אותו' });
+        }
+
+        const codeError = await studentCodeError(code);
+        if (codeError) {
+            return res.json({ success: false, message: codeError });
+        }
+
+        // תפיסת מקום במכסה לפני יצירת התלמיד. ההגדלה מותנית בכך שיש מקום,
+        // כך ששתי הרשמות במקביל לא יעברו את המגבלה.
+        const claimed = await RegistrationLink.findOneAndUpdate(
+            { _id: link._id, $expr: { $lt: ['$usedCount', '$maxRegistrations'] } },
+            { $inc: { usedCount: 1 } },
+            { new: true }
+        );
+
+        if (!claimed) {
+            return res.json({ success: false, message: 'הקישור מלא. פנה למורה שלך.' });
+        }
+
+        try {
+            await new Student({ id: code, name, balance: 0, classId: claimed.classId }).save();
+        } catch (saveError) {
+            // שחרור המקום אם היצירה נכשלה, למשל אם הקוד נתפס בדיוק באותו רגע
+            await RegistrationLink.findByIdAndUpdate(claimed._id, { $inc: { usedCount: -1 } });
+            return res.json({ success: false, message: 'הקוד הזה כבר תפוס, בחר קוד אחר' });
+        }
+
+        if (claimed.usedCount >= claimed.maxRegistrations && !claimed.limitReachedAt) {
+            claimed.limitReachedAt = new Date();
+            await claimed.save();
+        }
+
+        res.json({ success: true, message: 'נרשמת בהצלחה!', code });
+    } catch (error) {
+        console.error('Register error:', error.message);
+        res.json({ success: false, message: 'שגיאה בהרשמה' });
     }
 });
 
