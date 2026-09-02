@@ -131,6 +131,15 @@ async function waitForServer(timeoutMs = 30000) {
         check('קוד תלמיד כפול נדחה',
             (await admin('POST', '/api/students', { id: '10401', name: 'כפול', balance: 0, classId: classBId })).data.success === false);
 
+        // ההתחברות בודקת תלמיד לפני מנהל-על, ולכן קוד שמתנגש עם סיסמת
+        // מנהל-על היה נועל את המנהל בחוץ
+        check('קוד תלמיד שזהה לסיסמת מנהל-על נדחה',
+            (await admin('POST', '/api/students', { id: 'super-secret-admin-pw', name: 'חוטף', balance: 0, classId: classAId })).data.success === false);
+        check('קוד תלמיד שזהה לסיסמת מורה נדחה',
+            (await admin('POST', '/api/students', { id: 'teacher-a-pass', name: 'חוטף', balance: 0, classId: classAId })).data.success === false);
+        check('מנהל-העל עדיין נכנס אחרי כל זה',
+            (await makeClient()('POST', '/api/login', { code: 'super-secret-admin-pw' })).data.role === 'superadmin');
+
         // ============ 3. מורה ============
         console.log('\n3. מורה — בידוד בין כיתות');
         const teacherA = makeClient();
