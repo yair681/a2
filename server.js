@@ -14,7 +14,11 @@ const PORT = process.env.PORT || 3000;
 const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
 const TOKEN_COOKIE = 'cw_session';
 const TOKEN_TTL = '12h';
-const BCRYPT_ROUNDS = 12;
+// עלות 10 ולא 12. המכונה החינמית ב-Render מריצה bcrypt בעלות 12 בכ-2.2 שניות,
+// מה שהפך כל התחברות לאיטית. ההגנה מפני ניחוש היא ממילא הגבלת הניסיונות
+// (10 ל-15 דקות), לא עלות ה-hash. hash קיים בעלות 12 ימשיך לעבוד — העלות
+// שמורה בתוך ה-hash עצמו.
+const BCRYPT_ROUNDS = 10;
 
 // --- בדיקת משתני סביבה חובה ---
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -243,6 +247,13 @@ async function studentCodeError(code) {
     if (await Class.exists({ teacherPasswordLookup: lookupHash(code) })) {
         return 'הקוד הזה כבר תפוס, בחר קוד אחר';
     }
+    // חובה: ההתחברות בודקת תלמיד לפני מנהל-על, ולכן קוד תלמיד שזהה
+    // לסיסמת מנהל-על היה חוסם את המנהל מלהיכנס.
+    for (const admin of SUPER_ADMINS) {
+        if (await bcrypt.compare(code, admin.hash)) {
+            return 'הקוד הזה כבר תפוס, בחר קוד אחר';
+        }
+    }
     return null;
 }
 
@@ -359,30 +370,12 @@ app.post('/api/login', loginLimiter, async (req, res) => {
             return res.json({ success: false, message: 'נא להזין סיסמה או קוד' });
         }
 
-        // מנהל-על
-        for (const admin of SUPER_ADMINS) {
-            if (await bcrypt.compare(code, admin.hash)) {
-                issueToken(res, { role: 'superadmin', name: admin.name });
-                return res.json({ success: true, role: 'superadmin', name: admin.name });
-            }
-        }
-
-        // מורה
-        const classDoc = await Class.findOne({ teacherPasswordLookup: lookupHash(code) });
-        if (classDoc && await bcrypt.compare(code, classDoc.teacherPasswordHash)) {
-            issueToken(res, {
-                role: 'teacher',
-                classId: String(classDoc._id),
-                className: classDoc.name,
-                teacherName: classDoc.teacherName
-            });
-            return res.json({
-                success: true,
-                role: 'teacher',
-                className: classDoc.name,
-                teacherName: classDoc.teacherName
-            });
-        }
+        // הסדר כאן הוא סדר של ביצועים, לא של חשיבות.
+        // תלמידים הם רוב מוחלט של ההתחברויות, והבדיקה שלהם היא שאילתה
+        // מאונדקסת אחת בלי bcrypt. קודם היא רצה אחרונה, וכל תלמיד שילם
+        // שתי השוואות bcrypt של מנהלי-על לפני שהגיע תורו.
+        // הקודים ייחודיים בכל המערכת (ראה studentCodeError ו-passwordIsTaken),
+        // ולכן הסדר לא יכול לגרום לזיהוי שגוי.
 
         // תלמיד
         const student = await Student.findOne({ id: code }).populate('classId');
@@ -400,6 +393,31 @@ app.post('/api/login', loginLimiter, async (req, res) => {
                 name: student.name,
                 className: student.classId.name
             });
+        }
+
+        // מורה — שאילתה מאונדקסת ואז השוואת bcrypt אחת בלבד
+        const classDoc = await Class.findOne({ teacherPasswordLookup: lookupHash(code) });
+        if (classDoc && await bcrypt.compare(code, classDoc.teacherPasswordHash)) {
+            issueToken(res, {
+                role: 'teacher',
+                classId: String(classDoc._id),
+                className: classDoc.name,
+                teacherName: classDoc.teacherName
+            });
+            return res.json({
+                success: true,
+                role: 'teacher',
+                className: classDoc.name,
+                teacherName: classDoc.teacherName
+            });
+        }
+
+        // מנהל-על — הנתיב היקר, ומי שמתחבר בו הכי מעט
+        for (const admin of SUPER_ADMINS) {
+            if (await bcrypt.compare(code, admin.hash)) {
+                issueToken(res, { role: 'superadmin', name: admin.name });
+                return res.json({ success: true, role: 'superadmin', name: admin.name });
+            }
         }
 
         return res.json({ success: false, message: 'קוד או סיסמה שגויים' });

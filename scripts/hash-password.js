@@ -18,4 +18,6 @@ if (password.length < 8) {
     process.exit(1);
 }
 
-console.log(bcrypt.hashSync(password, 12));
+// עלות 10 ולא 12 — תואם ל-BCRYPT_ROUNDS בשרת. המכונה החינמית ב-Render
+// מריצה עלות 12 בכ-2.2 שניות, מה שהפך כל התחברות לאיטית.
+console.log(bcrypt.hashSync(password, 10));
