@@ -13,7 +13,26 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
 const TOKEN_COOKIE = 'cw_session';
-const TOKEN_TTL = '12h';
+
+/**
+ * אורך החיבור. ‏יאיר ביקש ב-07/10/2026 שהתחברות תחזיק עד שמתנתקים
+ * במפורש, במקום לפוג כל 12 שעות.
+ *
+ * מספר אחד ולא שניים: קודם היו כאן `'12h'` ל-JWT ו-`12*60*60*1000`
+ * לעוגייה, בשתי שורות נפרדות. שינוי של אחד בלי השני היה יוצר מצב
+ * שהעוגייה חיה אבל הטוקן שבתוכה פג, או להפך — תקלה שמתגלה רק אצל
+ * משתמש, אחרי זמן, ונראית אקראית.
+ *
+ * ⚠️ המחיר: הטוקן חתום ועומד בפני עצמו, ואין כאן טבלת סשנים. לכן אי
+ * אפשר לנתק מכשיר מרחוק; החלפת JWT_SECRET מנתקת את כולם בבת אחת
+ * (וגם שוברת את כניסת המורים, כי lookupHash נגזר ממנו).
+ */
+const SESSION_DAYS = 365;
+const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
+
+// חידוש מתגלגל: טוקן שכבר עבר את זה מאז שהונפק מקבל אחד חדש בבקשה
+// הבאה. כך מי שמשתמש במערכת לא מגיע לעולם לתפוגה.
+const RENEW_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 // עלות 10 ולא 12. המכונה החינמית ב-Render מריצה bcrypt בעלות 12 בכ-2.2 שניות,
 // מה שהפך כל התחברות לאיטית. ההגנה מפני ניחוש היא ממילא הגבלת הניסיונות
 // (10 ל-15 דקות), לא עלות ה-hash. hash קיים בעלות 12 ימשיך לעבוד — העלות
@@ -292,12 +311,15 @@ async function migrateLegacyPasswords() {
 // --- אימות ---
 
 function issueToken(res, payload) {
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_TTL });
+    // iat/exp מגיעים מהחתימה הקודמת כשמחדשים, ואסור להעביר אותם הלאה —
+    // jwt.sign היה מתלונן, ובכל מקרה אנחנו רוצים חלון חדש.
+    const { iat, exp, ...claims } = payload;
+    const token = jwt.sign(claims, JWT_SECRET, { expiresIn: `${SESSION_DAYS}d` });
     res.cookie(TOKEN_COOKIE, token, {
         httpOnly: true,
         secure: IS_PROD,
         sameSite: 'lax',
-        maxAge: 12 * 60 * 60 * 1000,
+        maxAge: SESSION_MS,
         path: '/'
     });
 }
@@ -312,6 +334,13 @@ function authenticate(req, res, next) {
 
     try {
         req.user = jwt.verify(token, JWT_SECRET);
+
+        // חידוש מתגלגל. בלעדיו גם חיבור ארוך פג בסוף בדיוק באמצע שימוש,
+        // ודווקא למי שנכנס כל יום. ההנפקה מחדש כותבת גם עוגייה חדשה,
+        // כך שגם תאריך התפוגה שלה נדחה.
+        const issuedAt = (req.user.iat || 0) * 1000;
+        if (Date.now() - issuedAt > RENEW_AFTER_MS) issueToken(res, req.user);
+
         next();
     } catch (error) {
         res.clearCookie(TOKEN_COOKIE, { path: '/' });
