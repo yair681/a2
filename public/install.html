@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>התקנת הארנק הדיגיטלי</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#194278">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="הארנק">
+    <link rel="apple-touch-icon" href="/icons/icon-180.png">
+    <link rel="icon" href="/icons/icon-192.png">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5; padding: 20px; margin: 0; color: #333; }
+        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 440px; margin: auto; }
+        .brand { text-align: center; margin-bottom: 18px; }
+        .brand img { width: 76px; height: 76px; border-radius: 18px; display: block; margin: 0 auto 10px; }
+        h1 { color: #333; font-size: 22px; margin: 0 0 6px; text-align: center; }
+        .sub { color: #666; font-size: 15px; text-align: center; margin: 0 0 22px; }
+        button, .btn { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc;
+                       font-size: 16px; font-family: inherit; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover:enabled { background-color: #0056b3; }
+        button:disabled { opacity: .6; cursor: default; }
+        .btn { display: block; text-align: center; text-decoration: none; color: #007bff; background: #fff; }
+        .hint { text-align: center; color: #666; font-size: 14px; min-height: 20px; }
+        .sep { height: 1px; background: #e4e6eb; margin: 22px 0; }
+        ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 0; }
+        ol.steps li { counter-increment: step; position: relative; padding: 0 44px 18px 0;
+                      border-right: 2px solid #e4e6eb; margin-right: 15px; }
+        ol.steps li:last-child { border-right-color: transparent; padding-bottom: 0; }
+        ol.steps li::before { content: counter(step); position: absolute; right: -16px; top: -2px;
+                              width: 30px; height: 30px; background: #007bff; color: #fff; border-radius: 50%;
+                              display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; }
+        ol.steps b { display: block; margin-bottom: 3px; }
+        .muted { color: #666; font-size: 14px; }
+        details { border: 1px solid #e4e6eb; border-radius: 10px; padding: 12px 14px; }
+        details summary { cursor: pointer; font-weight: 500; }
+        details > *:not(summary) { margin-top: 12px; }
+        .note { background: #eaf3ff; border-radius: 10px; padding: 12px 14px; font-size: 15px; margin-top: 18px; }
+        .foot { text-align: center; color: #888; font-size: 13px; margin-top: 18px; }
+        [hidden] { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="brand">
+            <img src="/icons/icon-192.png" alt="">
+            <h1>התקנת הארנק הדיגיטלי</h1>
+            <div class="sub">ההתקנה לוקחת רגע ולא עוברת דרך שום חנות.</div>
+        </div>
+
+        <button id="install-btn" type="button" disabled hidden>התקנת האפליקציה</button>
+        <div class="hint" id="install-hint">טוען…</div>
+
+        <div class="sep"></div>
+
+        <ol class="steps">
+            <li id="step-1">
+                <b>לחץ על "התקנת האפליקציה"</b>
+                <div class="muted">הכפתור למעלה. הדפדפן יציג חלון קטן לאישור.</div>
+            </li>
+            <li id="step-2">
+                <b>אשר את ההתקנה</b>
+                <div class="muted">האייקון יופיע במסך הבית, ליד שאר האפליקציות.</div>
+            </li>
+            <li>
+                <b>היכנס עם הקוד האישי</b>
+                <div class="muted">אותו קוד שקיבלת מהמורה. לא צריך להזין אותו שוב בכל פעם.</div>
+            </li>
+        </ol>
+
+        <div class="sep"></div>
+
+        <!-- מוצג רק בדפדפן שלא הציע התקנה. באייפון הרשימה למעלה נכתבת
+             מחדש במקום זה, כי שם זו הדרך היחידה ולא חלופה. -->
+        <details id="install-fallback" hidden>
+            <summary>הכפתור לא עובד? יש דרך אחרת</summary>
+            <p class="muted">
+                בכרום באנדרואיד: תפריט שלוש הנקודות למעלה ← "התקנת אפליקציה"
+                או "הוספה למסך הבית".
+            </p>
+            <p class="muted">
+                במחשב: סמל ההתקנה בצד שורת הכתובת, או תפריט שלוש הנקודות ← "התקנה".
+            </p>
+        </details>
+
+        <div class="note">
+            <b>לא רוצה להתקין כלום?</b><br>
+            המערכת עובדת במלואה גם מהדפדפן: <a href="/">מעבר לארנק</a>
+        </div>
+
+        <div class="foot">האפליקציה היא אותה מערכת, רק כאייקון בטלפון. אין חובה להתקין אותה.</div>
+    </div>
+
+    <script src="/install.js"></script>
+</body>
+</html>

@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>הארנק הכיתתי</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#194278">
+    <meta name="mobile-web-app-capable" content="yes">
+    <!-- apple-mobile-web-app-* הם מה שגורם לאייפון לפתוח את האתר במסך מלא
+         אחרי "הוספה למסך הבית", ולהציג את השם הקצר מתחת לאייקון. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="הארנק">
+    <link rel="apple-touch-icon" href="/icons/icon-180.png">
+    <link rel="icon" href="/icons/icon-192.png">
     <style>
         body { font-family: 'Segoe UI', sans-serif; text-align: center; background-color: #f0f2f5; padding: 20px; }
         .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
@@ -11,6 +20,14 @@
         button { background-color: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
         button:hover { background-color: #0056b3; }
         h1 { color: #333; }
+        .install-foot { border-top: 1px solid #e4e6eb; margin-top: 22px; padding-top: 18px; }
+        .install-link {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 12px; border: 1px solid #ccc; border-radius: 8px;
+            text-decoration: none; color: #007bff; background: #fff; font-size: 16px;
+        }
+        .install-link:hover { background: #f7f9fc; }
+        .install-hint { color: #888; font-size: 13px; margin: 8px 0 0; }
     </style>
 </head>
 <body>
@@ -21,6 +38,18 @@
         <input type="password" id="code" placeholder="הכנס את הסיסמה/קוד האישי שלך">
         <button onclick="login()">כניסה</button>
         <p id="error" style="color:red;"></p>
+
+        <div class="install-foot">
+            <a class="install-link" href="/install.html">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="6" y="2" width="12" height="20" rx="2.6" stroke="currentColor" stroke-width="1.8"></rect>
+                    <path d="M12 8v7m0 0l-2.6-2.6M12 15l2.6-2.6" stroke="currentColor" stroke-width="1.8"
+                          stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+                התקנת האפליקציה בטלפון
+            </a>
+            <p class="install-hint">כדי לפתוח את הארנק מהמסך הראשי, בלי להקליד כתובת</p>
+        </div>
     </div>
 
     <script src="common.js"></script>
