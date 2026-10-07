@@ -41,6 +41,30 @@
         .note { background: #eaf3ff; border-radius: 10px; padding: 12px 14px; font-size: 15px; margin-top: 18px; }
         .foot { text-align: center; color: #888; font-size: 13px; margin-top: 18px; }
         [hidden] { display: none !important; }
+
+        /* שכבת ההדרכה לאייפון. היא לא מתקינה כלום — אי אפשר — אלא מצביעה
+           על כפתור השיתוף של ספארי, שיושב בתחתית המסך. */
+        #ios-sheet { position: fixed; inset: 0; background: rgba(10, 20, 40, .72);
+                     display: flex; flex-direction: column; justify-content: flex-end;
+                     z-index: 50; padding: 16px; box-sizing: border-box; }
+        .ios-box { background: #fff; border-radius: 16px; padding: 20px; max-width: 420px;
+                   margin: 0 auto; width: 100%; box-sizing: border-box; }
+        .ios-box h2 { margin: 0 0 4px; font-size: 19px; }
+        .ios-box .lead { color: #666; font-size: 14px; margin: 0 0 16px; }
+        .ios-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+        .ios-num { flex: 0 0 26px; height: 26px; border-radius: 50%; background: #007bff; color: #fff;
+                   display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+        .ios-row div b { display: block; }
+        .ios-row div span { color: #666; font-size: 14px; }
+        .share-chip { display: inline-flex; align-items: center; gap: 6px; background: #f0f2f5;
+                      border-radius: 8px; padding: 3px 8px; vertical-align: middle; }
+        .ios-warn { background: #fff4e5; color: #8a5300; border-radius: 10px; padding: 10px 12px;
+                    font-size: 14px; margin-bottom: 14px; }
+        .ios-close { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #eef1f5;
+                     color: #333; font-size: 16px; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .ios-arrow { text-align: center; color: #fff; margin: 14px 0 2px; animation: bob 1.1s ease-in-out infinite; }
+        @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(7px); } }
+        @media (prefers-reduced-motion: reduce) { .ios-arrow { animation: none; } }
     </style>
 </head>
 <body>
@@ -92,6 +116,55 @@
         </div>
 
         <div class="foot">האפליקציה היא אותה מערכת, רק כאייקון בטלפון. אין חובה להתקין אותה.</div>
+    </div>
+
+    <!-- נפתח רק באייפון, בלחיצה על הכפתור. ראה ההערה ב-install.js:
+         דף אינטרנט לא יכול להוסיף את עצמו למסך הבית באייפון, ולכן זו
+         הדרכה שמצביעה על הכפתור ולא פעולה. -->
+    <div id="ios-sheet" hidden>
+        <div class="ios-box">
+            <h2>הוספה למסך הבית</h2>
+            <p class="lead">שני שלבים, ואז האייקון יהיה אצלך בטלפון.</p>
+
+            <div class="ios-warn" id="ios-browser-warning" hidden></div>
+
+            <div class="ios-row">
+                <div class="ios-num">1</div>
+                <div>
+                    <b>לחץ על כפתור השיתוף</b>
+                    <span>
+                        הסמל הזה
+                        <span class="share-chip">
+                            <svg width="15" height="18" viewBox="0 0 24 28" fill="none" aria-hidden="true">
+                                <path d="M12 2.5v15" stroke="#007bff" stroke-width="2.2" stroke-linecap="round"></path>
+                                <path d="M7.6 6.6L12 2.2l4.4 4.4" stroke="#007bff" stroke-width="2.2"
+                                      stroke-linecap="round" stroke-linejoin="round"></path>
+                                <path d="M5.5 11.5h-2v13h17v-13h-2" stroke="#007bff" stroke-width="2.2"
+                                      stroke-linecap="round" stroke-linejoin="round"></path>
+                            </svg>
+                        </span>
+                        בתחתית המסך. באייפד הוא למעלה.
+                    </span>
+                </div>
+            </div>
+
+            <div class="ios-row">
+                <div class="ios-num">2</div>
+                <div>
+                    <b>בחר "הוספה למסך הבית"</b>
+                    <span>צריך לגלול מעט ברשימה. אחר כך לחץ "הוסף" בפינה.</span>
+                </div>
+            </div>
+
+            <button class="ios-close" type="button" data-close>הבנתי</button>
+        </div>
+
+        <div class="ios-arrow" aria-hidden="true">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                <path d="M12 4v15m0 0l-6-6m6 6l6-6" stroke="#fff" stroke-width="2.4"
+                      stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+        </div>
     </div>
 
     <script src="/install.js"></script>
