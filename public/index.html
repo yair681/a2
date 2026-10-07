@@ -54,6 +54,34 @@
 
     <script src="common.js"></script>
     <script>
+        // יעד לפי תפקיד. מוגדר פעם אחת ומשרת גם את ההתחברות וגם את הזיהוי
+        // האוטומטי — שני עותקים של אותו מיפוי היו נפרדים זה מזה ביום שבו
+        // מישהו יוסיף תפקיד.
+        const HOME_BY_ROLE = {
+            superadmin: 'superadmin.html',
+            teacher: 'admin.html',
+            student: 'student.html'
+        };
+        const homeFor = (role) => HOME_BY_ROLE[role] || 'student.html';
+
+        // מי שכבר מחובר לא צריך להקליד את הקוד שוב.
+        //
+        // 🔴 בלי הבדיקה הזו עוגיית הסשן הארוכה חסרת משמעות: הסשן חי לגמרי,
+        // אבל הדף הראשון שנפתח הוא תמיד מסך כניסה — וכך זה נראה למשתמש
+        // כאילו הוא מנותק. זה בדיוק מה שקרה ב-07/10/2026: הארכנו את החיבור
+        // לשנה, והמשתמש המשיך להתבקש להתחבר, כי אף אחד לא שאל את השרת.
+        // replace ולא href, אחרת כפתור "אחורה" מקפיץ בחזרה למסך הכניסה.
+        (async () => {
+            try {
+                const res = await fetch('/api/me', { credentials: 'same-origin' });
+                if (!res.ok) return;                  // אין סשן — נשארים כאן
+                const me = await res.json();
+                if (me && me.role) window.location.replace(homeFor(me.role));
+            } catch (error) {
+                /* אין רשת — מציגים את מסך הכניסה כרגיל */
+            }
+        })();
+
         // ההתחברות מחזירה עוגיית סשן חתומה (httpOnly) שהדפדפן לא יכול לקרוא
         // או לזייף. אין יותר דגלי הרשאה ב-localStorage.
         async function login() {
@@ -88,14 +116,7 @@
                 }
 
                 sessionStorage.clear();
-
-                if (data.role === 'superadmin') {
-                    window.location.href = 'superadmin.html';
-                } else if (data.role === 'teacher') {
-                    window.location.href = 'admin.html';
-                } else {
-                    window.location.href = 'student.html';
-                }
+                window.location.href = homeFor(data.role);
             } catch (error) {
                 errorEl.innerText = 'שגיאה בחיבור לשרת. נסה שוב.';
             }
